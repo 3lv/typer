@@ -1,0 +1,67 @@
+                        erase1();                                                                                      ³all: executable
+                        erase1();                                                                                      ³
+                        erase1();                                                                                      ³install: typer
+                } else {                                                                                               ³        cp main.cpp builds/v1/main.cpp
+                        idx += 2;                                                                                      ³        cp typer builds/v1/typer
+                        erase1(); // cancel the 2 characters forming the special character (^C/^H)                     ³        cp typer ~/bin/typer
+                        erase1();                                                                                      ³
+                }                                                                                                      ³executable: main.cpp
+                if(first_char) {                                                                                       ³        $(CXX) main.cpp -o typer
+                        starting_time = time_ms();                                                                     ³~
+                        first_char = false;                                                                            ³~
+                        update_header(escape_color("blue") + "Test started");                                          ³~
+                }                                                                                                      ³~
+                // Handle special characters                                                                           ³~
+                if(k == 127 || k == 8) { // backspace                                                                  ³~
+                        if(idx > 0) {                                                                                  ³~
+                                erase1();                                                                              ³~
+                        }                                                                                              ³~
+                        continue;                                                                                      ³~
+                }                                                                                                      ³~
+                if(k == 3) { // ^C                                                                                     ³~
+                        system("stty cooked");                                                                         ³~
+                        system("clear");                                                                               ³~
+                        return 1;                                                                                      ³~
+                }                                                                                                      ³~
+                if(k == 23) { // ^W                                                                                    ³~
+                        if(idx > 0) {                                                                                  ³~
+                                erase1();                                                                              ³~
+                                while(idx > 0 && text[idx] != ' ') {                                                   ³~
+                                        erase1();                                                                      ³~
+                                }                                                                                      ³~
+                        }                                                                                              ³~
+                }                                                                                                      ³makefile                                                                                              8,20           All
+                // Typeable character                                                                                  ³Test finished!     100.450737 wpm     98.113205% acc
+                if(k >= 32 && k <= 126) {                                                                              ³however turn if around fact that well what seem will
+                        if(k == text[idx]) {                                                                           ³^M
+                                cout << "\b" << escape_color(COLORS_MAP.typed.correct) << text[idx] << flush;          ³[vlad@cauldron ~/workspace/cpp/typer]$ setterm --dump --file typer.dump
+                        } else if(k != text[idx]) {                                                                    ³setterm: cannot read /dev/vcsa: Permission denied
+                                incorrect_chars ++;                                                                    ³[vlad@cauldron ~/workspace/cpp/typer]$ sudo !!
+                                if(text[idx] == ' ') {                                                                 ³sudo setterm --dump --file typer.dump
+                                        cout << "\b" << "\033[41m" << text[idx] << flush;                              ³
+                                }                                                                                      ³
+                                cout << "\b" << escape_color(COLORS_MAP.typed.incorrect) << text[idx] << flush;        ³
+                        }                                                                                              ³
+                        if(idx == text_length) {                                                                       ³
+                                running = false;                                                                       ³
+                        }                                                                                              ³
+                }                                                                                                      ³
+                cout << escape_color("reset");                                                                         ³
+        }                                                                                                              ³
+        // 1 char/ms = 12000 wpm                                                                                       ³
+        float wpm = 12000.0 * text_length / (time_ms() - starting_time);                                               ³
+        float acc = 1.0 * text_length / (text_length + incorrect_chars) * 100;                                         ³
+        update_header(escape_color("lightgreen") + "Test finished!     "                                               ³
+                        + to_string(wpm) + escape_color("lightblue") + " wpm     "                                     ³
+                        + escape_color("lightgreen")                                                                   ³
+                        + to_string(acc) + "%" + escape_color("lightblue") + " acc"                                    ³
+                        );                                                                                             ³
+        cout << escape_color("reset");                                                                                 ³
+        cout << "\n\r";                                                                                                ³
+        char end_char = getchar();                                                                                     ³
+        cout << "\n\r";                                                                                                ³
+        system("stty cooked");                                                                                         ³
+        return 0;                                                                                                      ³
+}                                                                                                                      ³
+main.cpp                                                                                             200,1          Bot term://~//13370:/bin/bash                                                                             6,40           All
+
