@@ -123,6 +123,11 @@ void Screen::restore_coords() {
 	move(this->__coords);
 }
 void Screen::move(const unsigned int i, const unsigned int j) {
+	/*
+	std::cout << "\033["
+	+ std::to_string(i) + ";" + std::to_string(j)
+	+ "H" << std::flush;
+*/
 	const std::string cmd = "tput cup "
 		+ std::to_string(i) + " "
 		+ std::to_string(j);
