@@ -3,8 +3,10 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <string.h>
 #include <chrono>
 #include <random>
+#include "../include/screen.h"
 using namespace std;
 
 const string TYPER_DIR = (string)getenv("HOME") + "/documents/typer/";
@@ -20,6 +22,10 @@ enum class KEYS {
 	ctrlw = 23,
 };
 */
+
+
+
+
 
 map<string, string> CCODES = {
 	{"black", "30"},
@@ -58,6 +64,7 @@ struct color_map {
 	}typed;
 }COLORS_MAP;
 
+
 vector<string> text_words;
 
 string generate_text(string language, int lenght) {
@@ -80,18 +87,13 @@ string generate_text(string language, int lenght) {
 	text += text_words[lenght - 1];
 	return text;
 }
+
+Screen screen;
+
 string UP   = "\033[A";
 string DOWN = "\033[B";
 string RIGHT= "\033[C";
 string LEFT = "\033[D";
-
-void goto_col(int col) {
-	cout << '\r';
-	for(int i = 0 ; i < col; ++ i) {
-		cout << RIGHT;
-	}
-	cout << flush;
-}
 
 bool running = true;
 int incorrect_chars = 0;
@@ -100,18 +102,16 @@ string text = "";
 string spaces = "                              ";
 
 void erase1() {
-	cout << '\b' << text[idx] << '\b' << flush;
+	Coords c = screen.coords();
+	if(c.j == 0 && c.i > 0) {
+		screen.move(c.i - 1, screen.cols());
+		cout << text[idx];
+	} else {
+		cout << '\b' << text[idx] << '\b' << flush;
+	}
 	idx--;
 }
 
-void update_header(string text) {
-	cout << "\033[F";
-	cout << escape_color("reset");
-	cout << text;
-	cout << spaces << "\n";
-	cout << escape_color("reset");
-	goto_col(idx);
-}
 
 int time_ms() {
 	auto time = chrono::system_clock::now(); // get the current time
@@ -130,68 +130,65 @@ int main(int argc, char *argv[]) {
 	} else if(argc >= 3) {
 		text = generate_text(argv[2], atoi(argv[1]));
 	}
-	system("clear");
 	int text_length = text.size();
-	cout << escape_color("lightblack") + "Type the first char to start the timer" << "\n";
-	cout << escape_color("reset");
-	cout << "\r";
-	cout << text << "\r";
+	system("clear");
+	system("stty raw; stty -echo");
+	screen.header->change_text(escape_color("lightblack") + "Type the first char to start the timer");
+	system("stty echo");
+	cout << "\n\r" << flush;
+	screen.save_coords();
+	cout << text << flush;
+	system("stty -echo");
+	screen.restore_coords();
 	text = " " + text + "    ";
-	system("stty raw");
 	bool first_char = true;
 	int starting_time = 0;
 	while(running) {
 		char k = getchar();
 		if(k >= 32 && k <= 126) {
 			idx++;
-		} else if(k == 30 ){
-			idx += 3;
-			erase1();
-			erase1();
-			erase1();
 		} else {
-			idx += 2;
-			erase1(); // cancel the 2 characters forming the special character (^C/^H)
-			erase1();
 		}
 		if(first_char) {
 			starting_time = time_ms();
 			first_char = false;
-			update_header(escape_color("blue") + "Test started");
+			screen.header->change_text(escape_color("blue") + "Test started");
 		}
 		// Handle special characters
 		if(k == 127 || k == 8) { // backspace
 			if(idx > 0) {
 				erase1();
 			}
-			continue;
-		}
-		if(k == 3) { // ^C
-			system("stty cooked");
+		} else if(k == 3) { // ^C
+			system("stty cooked; stty echo");
 			system("clear");
 			return 1;
-		}
-		if(k == 23) { // ^W
+		} else if(k == 23) { // ^W
 			if(idx > 0) {
 				erase1();
 				while(idx > 0 && text[idx] != ' ') {
 					erase1();
 				}
 			}
-		}
-		// Typeable character
-		if(k >= 32 && k <= 126) {
+		} else if(k >= 32 && k <= 126) { // Typeable character
+			bool change_line = false;
+			if(screen.coords().j == screen.__cols - 1) {
+				change_line = true;
+			}
 			if(k == text[idx]) {
-				cout << "\b" << escape_color(COLORS_MAP.typed.correct) << text[idx] << flush;
+				cout << escape_color(COLORS_MAP.typed.correct) << text[idx] << flush;
 			} else if(k != text[idx]) {
 				incorrect_chars ++;
 				if(text[idx] == ' ') {
-					cout << "\b" << "\033[41m" << text[idx] << flush;
+					cout << "\033[41m" << text[idx] << flush;
 				}
-				cout << "\b" << escape_color(COLORS_MAP.typed.incorrect) << text[idx] << flush;
+				cout << escape_color(COLORS_MAP.typed.incorrect) << text[idx] << flush;
 			}
 			if(idx == text_length) {
 				running = false;
+			}
+			if(change_line == true) {
+				cout << "\n\r" << flush;
 			}
 		}
 		cout << escape_color("reset");
@@ -199,7 +196,7 @@ int main(int argc, char *argv[]) {
 	// 1 char/ms = 12000 wpm
 	float wpm = 12000.0 * text_length / (time_ms() - starting_time);
 	float acc = 1.0 * text_length / (text_length + incorrect_chars) * 100;
-	update_header(escape_color("lightgreen") + "Test finished!     "
+	screen.header->change_text(escape_color("lightgreen") + "Test finished!     "
 			+ to_string(wpm) + escape_color("lightblue") + " wpm     "
 			+ escape_color("lightgreen")
 			+ to_string(acc) + "%" + escape_color("lightblue") + " acc"
@@ -208,6 +205,6 @@ int main(int argc, char *argv[]) {
 	cout << "\n\r";
 	char end_char = getchar();
 	cout << "\n\r";
-	system("stty cooked");
+	system("stty cooked; stty echo");
 	return 0;
 }
