@@ -7,6 +7,7 @@
 class Coords;
 class Header; // tehnically buf1
 class Buffer; // buf2
+class Window;
 class Screen;
 
 class Coords { /* {{{ */
@@ -40,16 +41,25 @@ public:
 };
 
 class Buffer {
-	private:
-	public:
-		unsigned int __lines;
-		unsigned int __cols;
-		Coords __coords;
-		std::string text;
-		std::vector<std::string>lines;
-		Screen *screen;
-		Buffer(Screen *screen);
-		void update();
+private:
+public:
+	Screen *screen;
+	Window *window;
+	unsigned int __lines;
+	unsigned int __cols;
+	Coords __coords;
+	std::string text;
+	std::vector<std::string>lines;
+	Buffer(Window *window);
+	void update();
+};
+
+class Window {
+private:
+public:
+	Screen *screen; // parent screen
+	Buffer *buffer; // child buffer
+	Window(Screen *screen);
 };
 
 class Screen {
@@ -62,6 +72,7 @@ public:
 	Header *header;
 	Buffer *buffer;
 	// TODO vector<Buffer_ptr> buffers;
+	std::vector<Window*> windows;
 	Screen();
 	const unsigned int lines();
 	const unsigned int cols();

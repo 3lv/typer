@@ -1,6 +1,6 @@
-#MAJOR_VERSION := 1
-#MINOR_VERSION := 0
-#VERSION := v${MAJOR_VERSION}.$(MINOR_VERSION)
+MAJOR_VERSION := 1
+MINOR_VERSION := 0
+VERSION := v${MAJOR_VERSION}.$(MINOR_VERSION)
 
 CC = gcc
 CXX = g++
@@ -34,9 +34,15 @@ screen.o:	../src/screen.cpp \
 
 install: $(TARGET)
 	@echo "${VERSION}"
-	mkdir -p ~/documents/typer
-	cp -r ../langs ~/documents/typer/langs
-	cp typer ~/bin/typer
+	@echo "Installing documents.."
+	@mkdir -p ~/documents/typer
+	@cp -r ../langs ~/documents/typer/langs
+	@echo "Done!"
+	@echo "Installing binary.."
+	@cp typer ~/bin/typer
+	@echo "Done!"
+	@echo "Everything done!"
 
 clean:
-	rm "typer" $(OBJECTS)
+	@rm -f "typer" $(OBJECTS)
+	@echo "Cleaned!"

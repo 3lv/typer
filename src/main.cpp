@@ -6,6 +6,7 @@
 #include <string.h>
 #include <chrono>
 #include <random>
+#include <termios.h>
 #include "../include/screen.h"
 using namespace std;
 
@@ -107,6 +108,7 @@ int time_ms() {
 }
 
 
+
 int main(int argc, char *argv[]) {
 	if(argc == 1) {
 		text = generate_text("english", 10);
@@ -117,14 +119,9 @@ int main(int argc, char *argv[]) {
 	}
 	int text_length = text.size();
 	system("clear");
-	system("stty raw; stty -echo");
-	screen.header->change_text(escape_color("lightblack") + "Type the first char to start the timer");
-	system("stty echo");
-	cout << "\n\r" << flush;
-	screen.save_coords();
-	cout << text << flush;
-	system("stty -echo");
-	screen.restore_coords();
+	system("stty raw -echo");
+	screen.buffer->text = text;
+	screen.draw();
 	text = " " + text + "    ";
 	bool first_char = true;
 	int starting_time = 0;
@@ -145,7 +142,8 @@ int main(int argc, char *argv[]) {
 				erase1();
 			}
 		} else if(k == 3) { // ^C
-			system("stty cooked; stty echo");
+			//system("stty cooked; stty echo");
+			system("stty cooked echo");
 			system("clear");
 			return 1;
 		} else if(k == 23) { // ^W
