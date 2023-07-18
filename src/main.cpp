@@ -5,50 +5,44 @@
 #include <string>
 #include <string.h>
 #include <chrono>
+#include <thread>
 #include <random>
-#include <termios.h>
 #include "../include/screen.h"
 using namespace std;
+using namespace color;
 
 const string TYPER_DIR = (string)getenv("HOME") + "/documents/typer/";
 const string LANG_DIR = TYPER_DIR + "langs/";
 
-map<string, string> CCODES = {
-	{"black", "30"},
-	{"red", "31"},
-	{"green", "32"},
-	{"yellow", "33"},
-	{"blue", "34"},
-	{"magenta", "35"},
-	{"cyan", "36"},
-	{"white", "37"},
-	{"lightblack", "30;1"},
-	{"lightred", "31;1"},
-	{"lightgreen", "32;1"},
-	{"lightyellow", "33;1"},
-	{"lightblue", "34;1"},
-	{"lightmagenta", "35;1"},
-	{"lightcyan", "36;1"},
-	{"lightwhite", "37;1"},
-	{"reset", "0"},
+class cp { // color pair
+private:
+public:
+	ANSIcode fg;
+	ANSIcode bg;
+	cp() {
+		this->fg = RESET_COLOR;
+		this->bg = "";
+	}
+	cp(ANSIcode fg) {
+		this->fg = fg;
+		// TODO change BG_BLACK to screen->colors.background
+		this->bg = BG_BLACK;
+	}
+	cp(ANSIcode fg, ANSIcode bg) {
+		this->fg = fg;
+		this->bg = bg;
+	}
 };
-
-string escape_color(string color) {
-	string p = "\033[";
-	string s = "m";
-	return p + CCODES[color] + s;
-}
-
-// \033[31;1;4m
-
-struct color_map {
-	string current = "cyan";
-	string normal = "clear";
-	struct typed {
-		string incorrect = "red";
-		string correct = "green";
-	}typed;
-}COLORS_MAP;
+class User_colors {
+private:
+public:
+	cp normal;
+	cp current;
+	struct {
+		cp correct;
+		cp incorrect;
+	} typed;
+} C;
 
 
 vector<string> text_words;
@@ -74,7 +68,6 @@ string generate_text(string language, int lenght) {
 	return text;
 }
 
-Screen screen;
 
 string UP   = "\033[A";
 string DOWN = "\033[B";
@@ -85,15 +78,14 @@ bool running = true;
 int incorrect_chars = 0;
 int idx = 0;
 string text = "";
-string spaces = "                              ";
 
-void erase1() { // TODO: outdated function, change it to match window size
-	Coords c = screen.coords();
+void erase1(Screen *screen) { // TODO: outdated function, change it to match window size
+	Coords c = screen->cursor->coords();
 	if(c.j == 0 && c.i > 0) {
-		screen.move(c.i - 1, screen.cols());
-		cout << text[idx];
+		screen->cursor->move(c.i - 1, screen->__cols);
+		cout << C.normal.fg << text[idx];
 	} else {
-		cout << '\b' << text[idx] << '\b' << flush;
+		cout << '\b' << C.normal.fg << text[idx] << '\b' << flush;
 	}
 	idx--;
 }
@@ -107,8 +99,6 @@ int time_ms() {
 	return now;
 }
 
-
-
 int main(int argc, char *argv[]) {
 	if(argc == 1) {
 		text = generate_text("english", 10);
@@ -117,19 +107,28 @@ int main(int argc, char *argv[]) {
 	} else if(argc >= 3) {
 		text = generate_text(argv[2], atoi(argv[1]));
 	}
+	/*
+	 * cazan are mere
+	*/
 	int text_length = text.size();
+	C.normal = cp(FG_WHITE);
+	C.current = cp(RESET_COLOR);
+	C.typed.correct = cp(FG_GREEN);
+	C.typed.incorrect = cp(FG_RED);
 	system("stty raw -echo");
-	screen.create_win( Coords(0,0),
-			2,
-			screen.__cols
-			);
-	screen.create_win( Coords(2,0),
-			screen.__lines - 2,
-			screen.__cols
-			);
-	screen.windows[0]->buffer->text = "I am head";
-	screen.windows[1]->buffer->text = text;
+	Screen screen;
 	screen.draw();
+	screen.create_win( Coords(1,1),
+			2,
+			screen.__cols - 1
+			);
+	screen.create_win( Coords(4,2),
+			screen.__lines - 4,
+			screen.__cols - 2
+			);
+	screen.windows[0]->buf_text(FG_BLACK_L + "Waiting..");
+	screen.windows[1]->buf_text(C.normal.fg + text);
+	screen.cursor->move(screen.windows[1]);
 	text = " " + text + "    ";
 	bool first_char = true;
 	int starting_time = 0;
@@ -142,40 +141,39 @@ int main(int argc, char *argv[]) {
 		if(first_char) {
 			starting_time = time_ms();
 			first_char = false;
-			screen.windows[0]->buffer->text = (escape_color("blue") + "Test started");
-			screen.windows[0]->buffer->update();
-			screen.draw_win(0);
+			screen.windows[0]->buf_text(FG_BLUE + "Test started");
 		}
 		// Handle special characters
 		if(k == 127 || k == 8) { // backspace
 			if(idx > 0) {
-				erase1();
+				erase1(&screen);
 			}
 		} else if(k == 3) { // ^C
-			//system("stty cooked; stty echo");
+			screen.windows[0]->buf_text(FG_RED_L + "Test canceled:(");
+			screen.cursor->move(screen.__lines, 0);
 			system("stty cooked echo");
-			system("clear");
 			return 1;
 		} else if(k == 23) { // ^W
 			if(idx > 0) {
-				erase1();
+				erase1(&screen);
 				while(idx > 0 && text[idx] != ' ') {
-					erase1();
+					erase1(&screen);
 				}
 			}
 		} else if(k >= 32 && k <= 126) { // Typeable character
 			bool change_line = false;
-			if(screen.coords().j == screen.__cols - 1) {
+			if(screen.cursor->coords().j == screen.__cols - 1) {
 				change_line = true;
 			}
 			if(k == text[idx]) {
-				cout << escape_color(COLORS_MAP.typed.correct) << text[idx] << flush;
+				cout << C.typed.correct.fg << text[idx] << flush;
 			} else if(k != text[idx]) {
 				incorrect_chars ++;
 				if(text[idx] == ' ') {
-					cout << "\033[41m" << text[idx] << flush;
+					cout << BG_RED << text[idx] << flush;
+				} else {
+					cout << C.typed.incorrect.fg << text[idx] << flush;
 				}
-				cout << escape_color(COLORS_MAP.typed.incorrect) << text[idx] << flush;
 			}
 			if(idx == text_length) {
 				running = false;
@@ -183,23 +181,21 @@ int main(int argc, char *argv[]) {
 			if(change_line == true) {
 				cout << "\n\r" << flush;
 			}
+			cout << RESET_COLOR;
 		}
-		cout << escape_color("reset");
 	}
 	// 1 char/ms = 12000 wpm
 	float wpm = 12000.0 * text_length / (time_ms() - starting_time);
 	float acc = 1.0 * text_length / (text_length + incorrect_chars) * 100;
-	screen.windows[0]->buffer->text = (escape_color("lightgreen") + "Test finished!     "
-			+ to_string(wpm) + escape_color("lightblue") + " wpm     "
-			+ escape_color("lightgreen")
-			+ to_string(acc) + "%" + escape_color("lightblue") + " acc"
+	screen.windows[0]->buf_text( FG_GREEN_L + "Test finished!     "
+			+ to_string(wpm) + FG_BLUE_L + " wpm     "
+			+ FG_GREEN_L
+			+ to_string(acc) + "%" + FG_BLUE_L + " acc"
 			);
-	screen.windows[0]->buffer->update();
-	screen.draw_win(0);
-	cout << escape_color("reset");
-	cout << "\n\r";
+	// evident ca este o improvizatie
+	//screen.cursor->move(screen.windows[1]->__coords.i + screen.windows[1]->buffer->lines.size(), 0);
+	screen.cursor->move(screen.__lines, 0);
 	char end_char = getchar();
-	cout << "\n\r";
 	system("stty cooked; stty echo");
 	return 0;
 }
