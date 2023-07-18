@@ -5,8 +5,7 @@
 #include <vector>
 
 class Coords;
-class Header; // tehnically buf1
-class Buffer; // buf2
+class Buffer;
 class Window;
 class Screen;
 
@@ -29,27 +28,14 @@ public:
 	}
 }; /* }}} */
 
-class Header {
-private:
-	std::string text;
-	Coords __coords; // (1;1)
-	Coords __end_coords;
-	Screen *screen;
-public:
-	Header(Screen *sc);
-	void change_text(const std::string new_text);
-};
-
 class Buffer {
 private:
 public:
 	Screen *screen;
 	Window *window;
-	unsigned int __lines;
-	unsigned int __cols;
-	Coords __coords;
 	std::string text;
 	std::vector<std::string>lines;
+	Buffer();
 	Buffer(Window *window);
 	void update();
 };
@@ -59,7 +45,11 @@ private:
 public:
 	Screen *screen; // parent screen
 	Buffer *buffer; // child buffer
-	Window(Screen *screen);
+	Coords __coords;
+	unsigned int __lines;
+	unsigned int __cols;
+	Window(Screen *screen, Coords coords, unsigned int lines, unsigned int cols);
+	void update(Coords coords, unsigned int lines, unsigned int cols);
 };
 
 class Screen {
@@ -69,14 +59,12 @@ public:
 	unsigned int __cols;
 	Coords __coords;
 	Coords __text_end_coords;
-	Header *header;
-	Buffer *buffer;
-	// TODO vector<Buffer_ptr> buffers;
 	std::vector<Window*> windows;
 	Screen();
 	const unsigned int lines();
 	const unsigned int cols();
 	void __update ();
+	unsigned int create_win(Coords coords, unsigned int lines, unsigned int cols);
 	Coords coords();
 	void save_coords();
 	void restore_coords();
@@ -84,7 +72,7 @@ public:
 	bool in_screen(Coords coords);
 	void move(Coords __coords);
 	void rect(const unsigned int I, const unsigned int J, const unsigned int height, const unsigned int width);
-	void draw_win(Buffer *buffer);
+	void draw_win(const unsigned int winnr);
 	void draw();
 	void render();
 };

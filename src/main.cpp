@@ -87,7 +87,7 @@ int idx = 0;
 string text = "";
 string spaces = "                              ";
 
-void erase1() {
+void erase1() { // TODO: outdated function, change it to match window size
 	Coords c = screen.coords();
 	if(c.j == 0 && c.i > 0) {
 		screen.move(c.i - 1, screen.cols());
@@ -118,9 +118,17 @@ int main(int argc, char *argv[]) {
 		text = generate_text(argv[2], atoi(argv[1]));
 	}
 	int text_length = text.size();
-	system("clear");
 	system("stty raw -echo");
-	screen.buffer->text = text;
+	screen.create_win( Coords(0,0),
+			2,
+			screen.__cols
+			);
+	screen.create_win( Coords(2,0),
+			screen.__lines - 2,
+			screen.__cols
+			);
+	screen.windows[0]->buffer->text = "I am head";
+	screen.windows[1]->buffer->text = text;
 	screen.draw();
 	text = " " + text + "    ";
 	bool first_char = true;
@@ -134,7 +142,9 @@ int main(int argc, char *argv[]) {
 		if(first_char) {
 			starting_time = time_ms();
 			first_char = false;
-			screen.header->change_text(escape_color("blue") + "Test started");
+			screen.windows[0]->buffer->text = (escape_color("blue") + "Test started");
+			screen.windows[0]->buffer->update();
+			screen.draw_win(0);
 		}
 		// Handle special characters
 		if(k == 127 || k == 8) { // backspace
@@ -179,11 +189,13 @@ int main(int argc, char *argv[]) {
 	// 1 char/ms = 12000 wpm
 	float wpm = 12000.0 * text_length / (time_ms() - starting_time);
 	float acc = 1.0 * text_length / (text_length + incorrect_chars) * 100;
-	screen.header->change_text(escape_color("lightgreen") + "Test finished!     "
+	screen.windows[0]->buffer->text = (escape_color("lightgreen") + "Test finished!     "
 			+ to_string(wpm) + escape_color("lightblue") + " wpm     "
 			+ escape_color("lightgreen")
 			+ to_string(acc) + "%" + escape_color("lightblue") + " acc"
 			);
+	screen.windows[0]->buffer->update();
+	screen.draw_win(0);
 	cout << escape_color("reset");
 	cout << "\n\r";
 	char end_char = getchar();

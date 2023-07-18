@@ -19,6 +19,7 @@ TARGET  = typer
 first: all
 
 all: Makefile $(TARGET)
+	@echo "Everything compiled!"
 
 $(TARGET): $(OBJECTS)
 	$(LINK) $(LFLAGS) -o $(TARGET) $(OBJECTS)
@@ -44,5 +45,6 @@ install: $(TARGET)
 	@echo "Everything done!"
 
 clean:
+	@echo "Starting cleaning.."
 	@rm -f "typer" $(OBJECTS)
 	@echo "Cleaned!"

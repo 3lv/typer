@@ -31,39 +31,17 @@ char* exec(const std::string command) { /* {{{ */
 	return result;
 } /* }}} */
 
-Header::Header(Screen *sc): __coords(0,0) {
-		text = "";
-		this->screen = sc;
+Buffer::Buffer() {
+	text = "";
+	this->window = NULL;
+	this->screen = NULL;
 }
-void Header::change_text(const std::string new_text) {
-	screen->save_coords();
-        screen->move(this->__coords);
-        // TODO use a global function for CCODE transformations
-        std::cout << "\033[0m"; // reset highlighting
-        std::cout << new_text;
-	// TODO fix this for, text.size() isn't accurate, use coords instead
-	// OR add a clear header text function that should be ran before printing
-	/*
-        for (int i = new_text.size() + 1; i <= this->text.size(); ++i) {
-                std::cout << " ";
-        }
-	*/
-        this->text = new_text;
-        std::cout << "\033[0m";
-	std::cout << std::flush;
-        screen->restore_coords();
-}
-
-Buffer::Buffer(Window *window) : __coords(1,0) {
-	__lines = 0;
-	__cols = 0;
+Buffer::Buffer(Window *window) {
 	text = "";
 	this->window = window;
 	this->screen = window->screen;
 }
 void Buffer::update() {
-	screen->__update();
-	this->__cols = screen->__cols;
 	std::string word = "";
 	this->lines.clear();
 	int text_lenght = this->text.size();
@@ -74,7 +52,7 @@ void Buffer::update() {
 			word += " ";
 			if(lines.size() == 0) {
 				lines.push_back(word);
-			} else if(lines[lines.size() - 1].size() + word.size() <= this->__cols) {
+			} else if(lines[lines.size() - 1].size() + word.size() <= this->window->__cols) {
 				lines[lines.size() - 1] += word;
 			} else {
 				lines.push_back(word);
@@ -84,25 +62,34 @@ void Buffer::update() {
 	}
 	if(lines.size() == 0) {
 		lines.push_back(word);
-	} else if(lines[lines.size() - 1].size() + word.size() <= this->__cols) {
+	} else if(lines[lines.size() - 1].size() + word.size() <= this->window->__cols) {
 		lines[lines.size() - 1] += word;
 	} else {
 		lines.push_back(word);
 	}
-	this->__lines = lines.size();
 }
-Window::Window(Screen *screen) {
+Window::Window(Screen *screen, Coords coords, unsigned int lines, unsigned int cols): __coords(coords) {
 	this->screen = screen;
 	this->buffer = new Buffer(this);
+	__lines = lines;
+	__cols = cols;
 };
-
+void Window::update(Coords coords, unsigned int lines, unsigned int cols) {
+	this->__coords = coords;
+	this->__lines = lines;
+	this->__cols = cols;
+	this->buffer->update();
+	//redraw window
+}
 
 Screen::Screen() {
-	__lines = 0;
-	__cols = 0;
-	header = new Header(this);
-	buffer = new Buffer(new Window(this));
-	windows.push_back(buffer->window);
+	this->__update();
+	//BY DEFAULT SCREEN CREATES 2 WINDOWS
+}
+unsigned int Screen::create_win(Coords coords, unsigned int lines, unsigned int cols) {
+	Window *new_win = new Window(this, coords, lines, cols);
+	this->windows.push_back(new_win);
+	return windows.size();
 }
 const unsigned int Screen::lines() {
 	this->__lines = atoi(exec("tput lines"));
@@ -115,7 +102,6 @@ const unsigned int Screen::cols() {
 void Screen::__update () {
 	lines();
 	cols();
-	save_coords();
 }
 Coords Screen::coords() {
 	unsigned int i, j;
@@ -175,25 +161,43 @@ void Screen::rect(const unsigned int I, const unsigned int J, /* {{{ */
 		std::cout << "\033[A\b" << "#";
 	}
 } /* }}} */
-void Screen::draw_win(Buffer *buffer) {
-	buffer->update();
-	Coords c_coords = buffer->__coords;
+void Screen::draw_win(const unsigned int winnr) {
+	this->save_coords();
+	Window *window = this->windows[winnr];
+	Buffer *buffer = window->buffer;
+	Coords c_coords = window->__coords;
 	this->move(c_coords);
-	for(int line = 0; line < buffer->__lines; ++ line) {
+	int starting_line = 0;
+	int ending_line = buffer->lines.size();
+	if(ending_line - starting_line + 1 > window->__lines) {
+		ending_line = window->__lines + starting_line - 1;
+	}
+	for(int line = starting_line; line < ending_line; ++ line) {
 		if(this->in_screen(c_coords))
 			this->move(c_coords);
 		std::cout << buffer->lines[line];
 		++ c_coords.i;
 	}
+	this->restore_coords();
 }
 void Screen::draw() {
-	this->save_coords();
 	system("clear");
 	this->__update();
 	//rect(0, 0, this->lines(), this->cols());
-	this->header->change_text("I am the header!");
-	this->draw_win(this->buffer);
-	this->restore_coords();
-	this->move(1,0);
+	this->windows[0]->update(
+			windows[0]->__coords,
+			windows[0]->__lines,
+			this->__cols
+			);
+	this->windows[1]->update(
+			windows[1]->__coords,
+			this->__lines - windows[0]->__lines,
+			this->__cols
+			);
+	for(int i_win = 0; i_win < windows.size(); ++ i_win) {
+		this->draw_win(i_win);
+	}
+	this->move(windows[1]->__coords);
 }
 
+// vim:fdm=marker:
