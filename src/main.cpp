@@ -12,10 +12,12 @@
 using namespace std;
 using namespace color;
 
-std::ofstream LOG("debug.log");
-
-const string TYPER_DIR = (string)getenv("HOME") + "/documents/typer/";
+const string HOME = (string)getenv("HOME");
+const string TYPER_DIR = HOME + "/documents/typer/";
 const string LANG_DIR = TYPER_DIR + "langs/";
+
+const string DEBUG_DIR = HOME + "/workspace/cpp/typer/build/debug.log";
+//std::ofstream LOG(DEBUG_DIR);
 
 class cp { // color pair
 private:
