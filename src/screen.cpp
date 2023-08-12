@@ -1,36 +1,8 @@
 #include <iostream>
+#include <fstream>
 #include <string.h>
+#include <signal.h>
 #include "../include/screen.h"
-
-/* {{{
-char* exec(const std::string command) { 
-	FILE* fp;
-	char* line = NULL;
-	// Following initialization is equivalent to char* result = ""; and just
-	// initializes result to an empty string, only it works with
-	// -Werror=write-strings and is so much less clear.
-	char* result = (char*) calloc(1, 1);
-	size_t len = 0;
-	fflush(NULL);
-	fp = popen(command.c_str(), "r");
-	if (fp == NULL) {
-		std::cout << "Cannot execute command: " + command;
-		return NULL;
-	}
-	while(getline(&line, &len, fp) != -1) {
-		// +1 below to allow room for null terminator.
-		result = (char*) realloc(result, strlen(result) + strlen(line) + 1);
-		// +1 below so we copy the final null terminator.
-		strncpy(result + strlen(result), line, strlen(line) + 1);
-		free(line);
-		line = NULL;
-	}
-	fflush(fp);
-	if (pclose(fp) != 0) {
-		perror("Cannot close stream.\n");
-	}
-	return result;
-} }}} */
 
 Coords::Coords() {
 	this->i = 0;
@@ -44,7 +16,6 @@ const Coords Coords::operator+(const Coords &coords) {
 	return Coords(this->i + coords.i, this->j + coords.j);
 }
 
-
 Buffer::Buffer(): cursor_coords(0,0) {
 	text = "";
 	this->window = NULL;
@@ -56,41 +27,31 @@ Buffer::Buffer(Window *window): cursor_coords(0,0) {
 	this->screen = window->screen;
 }
 void Buffer::update() {
-	std::string word = "";
 	this->lines.clear();
 	int text_lenght = this->text.size();
+	std::string line = "";
+	// TODO: FIXME: might have problems with 2width chars
 	for(int i = 0; i < text_lenght; ++ i) {
-		if(text[i] != ' ') {
-			word += text[i];
+		if(text[i] == '\n') {
+			lines.push_back(line);
+			line = "";
 		} else {
-			word += " ";
-			if(lines.size() == 0) {
-				lines.push_back(word);
-			} else if(lines[lines.size() - 1].size() + word.size() <= this->window->__cols) {
-				lines[lines.size() - 1] += word;
-			} else {
-				lines.push_back(word);
-			}
-			word = "";
+			line += text[i];
 		}
 	}
-	if(word.size() != 0) {
-		if(lines.size() == 0) {
-			lines.push_back(word);
-		} else if(lines[lines.size() - 1].size() + word.size() <= this->window->__cols) {
-			lines[lines.size() - 1] += word;
-		} else {
-			lines.push_back(word);
-		}
+	if(line.size() != 0) {
+		lines.push_back(line);
 	}
 }
 void Buffer::change_text(std::string new_text) {
 	this->text = new_text;
 	this->update();
+	this->window->update_lines();
 	// TODO this call s ugly
 	this->screen->draw_win(this->window);
 	//this->window->redraw();
 }
+
 Window::Window(Screen *screen, Coords coords, unsigned int lines, unsigned int cols): __coords(coords) {
 	this->screen = screen;
 	this->buffer = new Buffer(this);
@@ -104,11 +65,64 @@ void Window::update(Coords coords, unsigned int lines, unsigned int cols) {
 	this->buffer->update();
 	//redraw window
 }
+void Window::update_lines() {
+	bool break_word = false;
+	this->lines.clear();
+	// TODO: USE POINTER INSTEAD
+	std::vector<std::string>buf_lines = this->buffer->lines;
+	std::string word = "";
+	for(int li = 0; li < buf_lines.size(); ++ li) {
+		for(int idx = 0; idx < buf_lines[li].size(); ++ idx) {
+			char cur_ch = buf_lines[li][idx];
+			if(cur_ch != ' ') {
+				word += cur_ch;
+			} else {
+				word += " ";
+				// TODO: FIXME: if 1 word longer than line
+				if(lines.size() == 0) {
+					lines.push_back(word);
+				} else if(lines[lines.size() - 1].size() + word.size() <= this->__cols) {
+					lines[lines.size() - 1] += word;
+				} else {
+					lines.push_back(word);
+				}
+				word = "";
+			}
+		}
+		if(word.size() != 0) {
+			if(lines.size() == 0) {
+				lines.push_back(word);
+			} else if(lines[lines.size() - 1].size() + word.size() <= this->__cols) {
+				lines[lines.size() - 1] += word;
+			} else {
+				lines.push_back(word);
+			}
+			word = "";
+		}
+	}
+	this->__dplen.clear();
+	__dplen.push_back(lines[0].size());
+	for(int i = 1; i < lines.size(); ++ i) {
+		__dplen.push_back(__dplen[i - 1] + lines[i].size());
+	}
+}
 void Window::buf_text(std::string new_text) {
 	this->buffer->change_text(new_text);
 }
+Coords Window::nth_char(unsigned int pos) {
+	int ac = 0;
+	int pas = 1<<30;
+	int n = __dplen.size();
+	while(pas) {
+		if(ac + pas < n && __dplen[ac + pas] < pos) {
+			ac += pas;
+		}
+		pas >>= 1;
+	}
+	return Coords(ac, pos - __dplen[ac]);
+}
 
-Cursor::Cursor(Screen *screen) : __coords(0,0) {
+Cursor::Cursor(Screen *screen) : stored_coords{Coords(0,0)}, __coords(0,0) {
 	this->screen = screen;
 	window = NULL;
 }
@@ -125,6 +139,7 @@ void Cursor::move(const unsigned int i, const unsigned int j) {
 	std::cout << "\033["
 	+ std::to_string(i + 1) + ";" + std::to_string(j + 1)
 	+ "H" << std::flush;
+	this->__coords = Coords(i, j);
 }
 void Cursor::move(Coords __coords) {
 	move(__coords.i, __coords.j);
@@ -136,16 +151,37 @@ void Cursor::move(Window *win) {
 	this->window = win;
 	this->move(win->__coords + win->buffer->cursor_coords);
 }
+void Cursor::move_inwin(Direction dir, bool wrap) {
+	if(dir == Direction::none) {
+		return;
+	}
+	if(dir == Direction::right) {
+	}
+}
 void Cursor::save_coords() {
-	this->__coords = this->coords();
+	this->stored_coords[0] = this->coords();
 }
 void Cursor::restore_coords() {
-	move(this->__coords);
+	move(this->stored_coords[0]);
+}
+void cazan() {
+	std::cout << "resized";
 }
 
 Screen::Screen() {
+	system("stty raw -echo");
+	// move to the alternate terminal buffer
+	std::cout << "\033[?1049h" << std::flush;
 	this->cursor = new Cursor(this);
 	this->__update();
+	//signal(SIGWINCH, Screen::resize);
+}
+Screen::~Screen() {
+	// restore to the default buffer
+	std::cout << std::flush;
+	std::cout << "\033[?1049l" << std::flush;
+	// restore normal modes
+	system("stty cooked echo");
 }
 unsigned int Screen::create_win(Coords coords, unsigned int lines, unsigned int cols) {
 	Window *new_win = new Window(this, coords, lines, cols);
@@ -154,7 +190,6 @@ unsigned int Screen::create_win(Coords coords, unsigned int lines, unsigned int 
 }
 // just updates the size, doesn't return
 void Screen::__update_size() {
-	unsigned int i, j;
 	cursor->save_coords();
 	cursor->move(9998,9998);
 	Coords lc = cursor->coords();
@@ -172,41 +207,51 @@ bool Screen::in_screen(Coords coords) {
 void Screen::rect(const unsigned int I, const unsigned int J, /* {{{ */
 		const unsigned int height, const unsigned int width) {
 	/*
-	 *       1 ------> 2
-	 *       ^         |
-	 *       |         |
-	 *       |         |
-	 *       |         v
-	 *       4 <------ 3
+	 *	OUTDATED
+	 *      1 ------> 2
+	 *      ^         |
+	 *      |         |
+	 *      |         |
+	 *      |         v
+	 *      4 <------ 3
+	 */
+	/*
+	 *      1 ------> 2
+	 *      3         |
+	 *      |         |
+	 *      |         |
+	 *      v         v
+	 *      4 ----->5 3
 	 *
 	 */
+	cursor->save_coords();
 	cursor->move(I, J);
-	std::cout << "X"; // top left corner
+	std::cout << "┌"; // top left corner
 	for(int i = 1; i < width - 1; ++ i) {
-		std::cout << "#";
+		std::cout << "─";
 	}
-	std::cout << "X"; // top right corner
+	std::cout << "┐"; // top right corner
 	for(int i = 1; i < height - 1; ++ i) {
-		std::cout << "\033[B" << "#";
+		std::cout << "\n\b" << "│";
 	}
-	std::cout << "\033[B";
-	std::cout << "X"; // bot right corner
-	std::cout << "\b" << "#";
+	std::cout << "\n\b";
+	std::cout << "┘"; // bot right corner
+	cursor->move(I, J + 1);
+	for(int i = 1; i < height - 1; ++ i) {
+		std::cout << "\n\b" << "│";
+	}
+	std::cout << "\n\b" << "└"; // bot left corner
 	for(int i = 1; i < width - 1; ++ i) {
-		std::cout << "\b\b" << "#";
+		std::cout << "─";
 	}
-	std::cout << "\b\b" << "X"; // bot left corner
-	for(int i = 1; i < height - 1; ++ i) {
-		std::cout << "\033[A\b" << "#";
-	}
+	cursor->restore_coords();
 } /* }}} */
 void Screen::draw_win(Window *window) {
 	cursor->save_coords();
-	Buffer *buffer = window->buffer;
 	Coords c_coords = window->__coords;
 	cursor->move(c_coords);
 	int starting_line = 0;
-	int ending_line = buffer->lines.size() - 1;
+	int ending_line = window->lines.size() - 1;
 	if(ending_line - starting_line + 1 > window->__lines) {
 		ending_line = window->__lines + starting_line - 1;
 	}
@@ -215,7 +260,13 @@ void Screen::draw_win(Window *window) {
 		if(this->in_screen(c_coords)) {
 			cursor->move(c_coords);
 		}
-		std::cout << buffer->lines[line];
+		std::cout << window->lines[line];
+		const int spaces = window->__cols - window->lines[line].size();
+		// TODO: clear what was previously displayed
+		for(int i = 0; i < spaces; ++ i) {
+			std::cout << " ";
+		}
+		// std::cout << "spaces to clear previous text";
 		++ c_coords.i;
 	}
 	std::cout << color::RESET_COLOR;
@@ -224,8 +275,8 @@ void Screen::draw_win(Window *window) {
 void Screen::draw_win(const unsigned int winnr) {
 	this->draw_win(this->windows[winnr]);
 }
-void Screen::draw() {
-	system("clear");
+
+void Screen::resize(int signum) {
 	// PROVIZORIU
 	this->__update();
 	int winn = windows.size();
@@ -254,6 +305,5 @@ void Screen::draw() {
 		cursor->move(windows[1]->__coords);
 	}
 }
-
 
 // vim:fdm=marker:

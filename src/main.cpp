@@ -7,9 +7,12 @@
 #include <chrono>
 #include <thread>
 #include <random>
+#include <signal.h>
 #include "../include/screen.h"
 using namespace std;
 using namespace color;
+
+std::ofstream LOG("debug.log");
 
 const string TYPER_DIR = (string)getenv("HOME") + "/documents/typer/";
 const string LANG_DIR = TYPER_DIR + "langs/";
@@ -36,14 +39,13 @@ public:
 class User_colors {
 private:
 public:
-	cp normal;
-	cp current;
+	cp normal = cp(FG_WHITE);
+	cp current = cp(RESET_COLOR);
 	struct {
-		cp correct;
-		cp incorrect;
+		cp correct = cp(FG_GREEN);
+		cp incorrect = cp(FG_RED);
 	} typed;
 } C;
-
 
 vector<string> text_words;
 
@@ -76,18 +78,27 @@ string LEFT = "\033[D";
 
 bool running = true;
 int incorrect_chars = 0;
+Coords c;
 int idx = 0;
 string text = "";
 
 void erase1(Screen *screen) { // TODO: outdated function, change it to match window size
-	Coords c = screen->cursor->coords();
-	if(c.j == 0 && c.i > 0) {
-		screen->cursor->move(c.i - 1, screen->__cols);
-		cout << C.normal.fg << text[idx];
+	if(idx == 0) {
+		return;
+	}
+	if(c.j == 0) {
+		c.i--;
+		c.j = screen->windows[1]->lines[c.i].size() - 1;
+		screen->cursor->move(c.i + screen->windows[1]->__coords.i, c.j + screen->windows[1]->__coords.j);
+		cout << C.normal.fg << text[idx] << '\b' << flush;
+		idx--;
 	} else {
 		cout << '\b' << C.normal.fg << text[idx] << '\b' << flush;
+		c.j--;
+		idx--;
 	}
-	idx--;
+}
+void correct() {
 }
 
 
@@ -98,6 +109,9 @@ int time_ms() {
 	int now = millis.count(); // just like java (new Date()).getTime();
 	return now;
 }
+void resize(int signum) {
+	exit(signum);
+}
 
 int main(int argc, char *argv[]) {
 	if(argc == 1) {
@@ -107,37 +121,31 @@ int main(int argc, char *argv[]) {
 	} else if(argc >= 3) {
 		text = generate_text(argv[2], atoi(argv[1]));
 	}
-	/*
-	 * cazan are mere
-	*/
 	int text_length = text.size();
-	C.normal = cp(FG_WHITE);
-	C.current = cp(RESET_COLOR);
-	C.typed.correct = cp(FG_GREEN);
-	C.typed.incorrect = cp(FG_RED);
-	system("stty raw -echo");
+	if(text_length == 0) {
+		return 0;
+	}
 	Screen screen;
-	screen.draw();
-	screen.create_win( Coords(1,1),
+	int starti = 0.4 * screen.__lines;
+	int startj = 0.1 * screen.__cols + 1;
+	//screen.rect(4, 4, 10, 10);
+	screen.create_win( Coords(starti - 3, startj + 3),
 			2,
-			screen.__cols - 1
+			screen.__cols - startj - 1
 			);
-	screen.create_win( Coords(4,2),
-			screen.__lines - 4,
-			screen.__cols - 2
+	// screen.__lines numarul de linii
+	screen.create_win( Coords(starti, startj),
+			screen.__lines,
+			screen.__cols - startj * 2
 			);
-	screen.windows[0]->buf_text(FG_BLACK_L + "Waiting..");
-	screen.windows[1]->buf_text(C.normal.fg + text);
+	screen.windows[0]->buf_text(FG_BLACK_L + "Type anything to start the test..");
+	screen.windows[1]->buf_text(text);
 	screen.cursor->move(screen.windows[1]);
 	text = " " + text + "    ";
 	bool first_char = true;
 	int starting_time = 0;
 	while(running) {
 		char k = getchar();
-		if(k >= 32 && k <= 126) {
-			idx++;
-		} else {
-		}
 		if(first_char) {
 			starting_time = time_ms();
 			first_char = false;
@@ -150,8 +158,6 @@ int main(int argc, char *argv[]) {
 			}
 		} else if(k == 3) { // ^C
 			screen.windows[0]->buf_text(FG_RED_L + "Test canceled:(");
-			screen.cursor->move(screen.__lines, 0);
-			system("stty cooked echo");
 			return 1;
 		} else if(k == 23) { // ^W
 			if(idx > 0) {
@@ -162,12 +168,16 @@ int main(int argc, char *argv[]) {
 			}
 		} else if(k >= 32 && k <= 126) { // Typeable character
 			bool change_line = false;
-			if(screen.cursor->coords().j == screen.__cols - 1) {
+			if(c.j == screen.windows[1]->lines[c.i].size() - 1) {
 				change_line = true;
 			}
-			if(k == text[idx]) {
+			if(k == text[idx + 1]) {
+				idx++;
+				c.j++;
 				cout << C.typed.correct.fg << text[idx] << flush;
-			} else if(k != text[idx]) {
+			} else if(k != text[idx + 1]) {
+				idx++;
+				c.j++;
 				incorrect_chars ++;
 				if(text[idx] == ' ') {
 					cout << BG_RED << text[idx] << flush;
@@ -179,7 +189,9 @@ int main(int argc, char *argv[]) {
 				running = false;
 			}
 			if(change_line == true) {
-				cout << "\n\r" << flush;
+				++ c.i;
+				c.j = 0;
+				screen.cursor->move(c.i + screen.windows[1]->__coords.i, c.j + screen.windows[1]->__coords.j);
 			}
 			cout << RESET_COLOR;
 		}
@@ -192,10 +204,7 @@ int main(int argc, char *argv[]) {
 			+ FG_GREEN_L
 			+ to_string(acc) + "%" + FG_BLUE_L + " acc"
 			);
-	// evident ca este o improvizatie
-	//screen.cursor->move(screen.windows[1]->__coords.i + screen.windows[1]->buffer->lines.size(), 0);
-	screen.cursor->move(screen.__lines, 0);
+	//screen.cursor->move(screen.__lines, 0);
 	char end_char = getchar();
-	system("stty cooked; stty echo");
 	return 0;
 }

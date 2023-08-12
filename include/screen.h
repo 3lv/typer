@@ -21,8 +21,8 @@ public:
 	const Coords operator+(const Coords &coords);
 };
 
-namespace color {
 	/* Consts {{{ */
+namespace color {
 	typedef std::string ANSIcode;
 	const ANSIcode RESET_COLOR = "\033[0m";
 	const ANSIcode FG_BLACK = "\033[30m";
@@ -58,13 +58,16 @@ namespace color {
 	const ANSIcode BG_CYAN_L = "\033[46;1m";
 	const ANSIcode BG_WHITE_L = "\033[47;1m";
 }
+/* }}} */
 
 class Buffer {
 private:
 public:
 	Screen *screen;
+	// Parent window
 	Window *window;
-	Coords cursor_coords; // relative to the buffer
+	// (relative to the Parent window.__coords)
+	Coords cursor_coords;
 	std::string text;
 	std::vector<std::string>lines;
 	Buffer();
@@ -76,34 +79,48 @@ public:
 class Window {
 private:
 public:
-	Screen *screen; // parent screen
-	Buffer *buffer; // child buffer
+	// Parent screen
+	Screen *screen;
+	// Child buffer
+	Buffer *buffer;
 	unsigned int winnr;
 	Coords __coords;
+	std::vector<std::string>lines;
+	// vector that holds the partial sum of the length of the lines
+	std::vector<int> __dplen;
 	unsigned int __lines;
 	unsigned int __cols;
 	Window(Screen *screen, Coords coords, unsigned int lines, unsigned int cols);
+	void last_filled_line();
+	void last_col();
 	void update(Coords coords, unsigned int lines, unsigned int cols);
+	// Update lines to fit the window
+	void update_lines();
 	void buf_text(std::string new_text);
+	// finds the coords of element on specific position
+	Coords nth_char(unsigned int pos);
 };
 
 class Cursor {
 private:
 public:
-	enum class DIR{
-		NONE, UP, DOWN, RIGHT, LEFT, RIGHTW
+	enum class Direction{
+		none, up, down, right, left
 	};
 	Screen *screen;
 	Window *window;
+	Coords stored_coords[10];
+	// lazy loaded coords (might not be accurate)
 	Coords __coords;
+	// calculated coords
 	Coords buffer_coords;
 	Cursor(Screen *screen);
 	Coords coords();
 	void move(unsigned int i, unsigned int j);
 	void move(Coords coords);
 	void move(Window *win);
-	// TODO
-	void buf_move(DIR dir);
+	// TODO: function implementation
+	void move_inwin(Direction dir, bool wrap);
 	void save_coords();
 	void restore_coords();
 };
@@ -117,6 +134,7 @@ public:
 	unsigned int __cols;
 	Coords __coords;
 	Screen();
+	~Screen();
 	void __update_size();
 	void __update();
 	unsigned int create_win(Coords coords, unsigned int lines, unsigned int cols);
@@ -124,7 +142,7 @@ public:
 	void rect(const unsigned int I, const unsigned int J, const unsigned int height, const unsigned int width);
 	void draw_win(Window *win);
 	void draw_win(const unsigned int winnr);
-	void draw();
+	void resize(int signum);
 };
 
 #endif // SCREEN_H

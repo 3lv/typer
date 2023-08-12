@@ -1,4 +1,35 @@
 #include <termios.h>
+
+/* {{{
+char* exec(const std::string command) { 
+	FILE* fp;
+	char* line = NULL;
+	// Following initialization is equivalent to char* result = ""; and just
+	// initializes result to an empty string, only it works with
+	// -Werror=write-strings and is so much less clear.
+	char* result = (char*) calloc(1, 1);
+	size_t len = 0;
+	fflush(NULL);
+	fp = popen(command.c_str(), "r");
+	if (fp == NULL) {
+		std::cout << "Cannot execute command: " + command;
+		return NULL;
+	}
+	while(getline(&line, &len, fp) != -1) {
+		// +1 below to allow room for null terminator.
+		result = (char*) realloc(result, strlen(result) + strlen(line) + 1);
+		// +1 below so we copy the final null terminator.
+		strncpy(result + strlen(result), line, strlen(line) + 1);
+		free(line);
+		line = NULL;
+	}
+	fflush(fp);
+	if (pclose(fp) != 0) {
+		perror("Cannot close stream.\n");
+	}
+	return result;
+} }}} */
+
 class Term {
 private:
 	termios __previous_mode;
