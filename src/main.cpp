@@ -9,12 +9,25 @@
 #include <random>
 #include <signal.h>
 #include "../include/screen.h"
+
+#ifdef _WIN32
+# include <conio.h>
+#else
+# define getch() getchar()
+#endif
+
 using namespace std;
 using namespace color;
 
+#ifdef _WIN32
+const string HOME = ".";
+const string TYPER_DIR = HOME + "/.";
+const string LANG_DIR = "langs/";
+#else
 const string HOME = (string)getenv("HOME");
 const string TYPER_DIR = HOME + "/documents/typer/";
 const string LANG_DIR = TYPER_DIR + "langs/";
+#endif
 
 const string DEBUG_DIR = HOME + "/workspace/cpp/typer/build/debug.log";
 //std::ofstream LOG(DEBUG_DIR);
@@ -160,7 +173,7 @@ int main(int argc, char *argv[]) {
 	bool first_char = true;
 	int starting_time = 0;
 	while(running) {
-		char k = getchar();
+		char k = getch();
 		if(first_char) {
 			starting_time = time_ms();
 			first_char = false;
@@ -220,6 +233,6 @@ int main(int argc, char *argv[]) {
 			+ to_string(acc) + "%" + FG_BLUE_L + " acc"
 			);
 	//screen.cursor->move(screen.__lines, 0);
-	char end_char = getchar();
+	char end_char = getch();
 	return 0;
 }

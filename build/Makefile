@@ -1,30 +1,47 @@
 MAJOR_VERSION := 1
 MINOR_VERSION := 0
-VERSION := v${MAJOR_VERSION}.$(MINOR_VERSION)
+VERSION := v$(MAJOR_VERSION).$(MINOR_VERSION)
 
-CC = gcc
 CXX = g++
-DEFINES =
-LINK = g++
-LFLAGS = -Wl,-O1
-CXXFLAGS = -pipe -O2 -Wall -W $(DEFINES)
+WINCXX = x86_64-w64-mingw32-g++
 INCPATH = -I../
+# CXXFLAGS = -Wall -Werror -Wextra -W
+CXXFLAGS = -Wall -W
+
+# debug build settings
+DBGCXXFLAGS = -g -DDEBUG
+
+# release build settings
+RELCXXFLAGS = -O3 -static -DNDEBUG
 
 SOURCES = ../src/main.cpp \
 	  ../src/screen.cpp
 OBJECTS = main.o \
 	  screen.o
+
 TARGET  = typer
+WINTARGET = typer.exe
 
-first: all
+.PHONY: all clean debug release
 
-all: Makefile $(TARGET)
-	@echo "Everything compiled!"
+all: release
 
-$(TARGET): $(OBJECTS)
-	$(LINK) $(LFLAGS) -o $(TARGET) $(OBJECTS)
+win: CXX = $(WINCXX)
+win: TARGET = $(WINTARGET)
+win: release
 
-main.o: 	../src/main.cpp \
+debug: CXXFLAGS += $(DBGCXXFLAGS)
+debug: $(TARGET)
+
+release: CXXFLAGS += $(RELCXXFLAGS)
+release: $(TARGET)
+
+$(TARGET) : $(OBJECTS)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJECTS)
+	@ #if [ ${TERM} -eq "dumb" ]; then echo "dumb"; else echo "smart"; fi
+	@echo "##### $(TARGET) built! #####"
+
+main.o:		../src/main.cpp \
 		../include/screen.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o main.o ../src/main.cpp
 
@@ -32,19 +49,13 @@ screen.o:	../src/screen.cpp \
 		../include/screen.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o screen.o ../src/screen.cpp
 
-
 install: $(TARGET)
-	@echo "${VERSION}"
-	@echo "Installing documents.."
+	@echo "Installing ${TARGET} ${VERSION}"
 	@mkdir -p ~/documents/typer
 	@cp -r ../langs ~/documents/typer/langs
-	@echo "Done!"
-	@echo "Installing binary.."
 	@cp typer ~/bin/typer
 	@echo "Done!"
-	@echo "Everything done!"
 
 clean:
-	@echo "Starting cleaning.."
-	@rm -f "typer" $(OBJECTS)
+	@rm -f *.o $(TARGET)
 	@echo "Cleaned!"

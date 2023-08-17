@@ -4,6 +4,52 @@
 #include <signal.h>
 #include "../include/screen.h"
 
+#ifdef _WIN32
+# include <windows.h>
+#endif
+
+namespace Term {
+#ifdef _WIN32
+	DWORD old_dwMode;
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	void vt_proc() {
+		GetConsoleMode(hConsole, &old_dwMode);
+		DWORD dwMode = old_dwMode;
+		dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+		SetConsoleMode(hConsole, dwMode);
+	}
+	void vt_proc_reset() {
+		SetConsoleMode(hConsole, old_dwMode);
+	}
+	void clear_screen() {
+		system("cls");
+	}
+	void setup_term() {
+		clear_screen();
+		vt_proc();
+		//term_raw();
+	}
+	void reset_term() {
+		vt_proc_reset();
+		//term_raw_reset();
+	}
+#else
+	void setup_term() {
+		system("stty raw -echo");
+		// move to the alternate terminal buffer
+		std::cout << "\033[?1049h" << std::flush;
+	}
+	void reset_term() {
+		// restore to the default buffer
+		std::cout << std::flush;
+		std::cout << "\033[?1049l" << std::flush;
+		// restore normal modes
+		system("stty cooked echo");
+		//std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+	}
+#endif
+}
+
 Coords::Coords() {
 	this->i = 0;
 	this->j = 0;
@@ -128,10 +174,18 @@ Cursor::Cursor(Screen *screen) : stored_coords{Coords(0,0)}, __coords(0,0) {
 }
 Coords Cursor::coords() {
 	unsigned int i, j;
+#ifdef _WIN32
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(Term::hConsole, &csbi);
+	COORD pos = csbi.dwCursorPosition;
+	i = pos.Y;
+	j = pos.X;
+#else
 	std::cout << "\033[6n" << std::flush;
 	scanf("\033[%d;%dR", &i, &j);
 	-- i;
 	-- j;
+#endif
 	return Coords(i, j);
 }
 void Cursor::move(const unsigned int i, const unsigned int j) {
@@ -169,19 +223,13 @@ void cazan() {
 }
 
 Screen::Screen() {
-	system("stty raw -echo");
-	// move to the alternate terminal buffer
-	std::cout << "\033[?1049h" << std::flush;
+	Term::setup_term();
 	this->cursor = new Cursor(this);
 	this->__update();
 	//signal(SIGWINCH, Screen::resize);
 }
 Screen::~Screen() {
-	// restore to the default buffer
-	std::cout << std::flush;
-	std::cout << "\033[?1049l" << std::flush;
-	// restore normal modes
-	system("stty cooked echo");
+	Term::reset_term();
 }
 unsigned int Screen::create_win(Coords coords, unsigned int lines, unsigned int cols) {
 	Window *new_win = new Window(this, coords, lines, cols);
