@@ -53,8 +53,11 @@ vector<string> text_words;
 
 string generate_text(string language, int lenght) {
 	mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
-	string lang_path = LANG_DIR + language + ".words";
-	ifstream fin(lang_path);
+	string lang_file = LANG_DIR + language + ".words";
+	ifstream fin(lang_file);
+	if(!fin.good()) {
+		return "";
+	}
 	vector <string> words;
 	string word;
 	while(fin >> word) {
@@ -83,6 +86,9 @@ int incorrect_chars = 0;
 Coords c;
 int idx = 0;
 string text = "";
+string language = "english";
+size_t word_count = 10;
+size_t text_length = 0;
 
 void erase1(Screen *screen) { // TODO: outdated function, change it to match window size
 	if(idx == 0) {
@@ -115,17 +121,24 @@ void resize(int signum) {
 	exit(signum);
 }
 
-int main(int argc, char *argv[]) {
-	if(argc == 1) {
-		text = generate_text("english", 10);
-	} else if(argc == 2) {
-		text = generate_text("english", atoi(argv[1]));
-	} else if(argc >= 3) {
-		text = generate_text(argv[2], atoi(argv[1]));
+
+void parse_args(int argc, char *argv[]) {
+	for(int i = 1; i < argc; ++ i) {
+		int num = atoi(argv[i]);
+		if(num) {
+			word_count = num;
+		} else {
+			language = argv[i];
+		}
 	}
-	int text_length = text.size();
+}
+
+int main(int argc, char *argv[]) {
+	parse_args(argc, argv);
+	text = generate_text(language, word_count);
+	text_length = text.size();
 	if(text_length == 0) {
-		return 0;
+		return 1;
 	}
 	Screen screen;
 	int starti = 0.4 * screen.__lines;
