@@ -20,17 +20,19 @@ using namespace std;
 using namespace color;
 
 #ifdef _WIN32
-const string HOME = ".";
-const string TYPER_DIR = HOME + "/.";
+const string HOME = "./";
+const string PWD = HOME;
+const string TYPER_DIR = HOME + ".";
 const string LANG_DIR = "langs/";
 #else
-const string HOME = (string)getenv("HOME");
-const string TYPER_DIR = HOME + "/documents/typer/";
+const string HOME = (string)getenv("HOME") + "/";
+const string PWD = (string)getenv("PWD") + "/";
+const string TYPER_DIR = HOME + "documents/typer/";
 const string LANG_DIR = TYPER_DIR + "langs/";
 #endif
 
 const string DEBUG_DIR = HOME + "/workspace/cpp/typer/build/debug.log";
-//std::ofstream LOG(DEBUG_DIR);
+std::ofstream LOG(DEBUG_DIR);
 
 struct cp { // color pair
 	std::string fg;
@@ -103,12 +105,28 @@ void parse_args(int argc, char *argv[]) {
 	}
 }
 
+std::string read_file(std::string filename) {
+	ifstream fin(filename);
+	std::string line_buf;
+	std::string buf;
+	while(getline(fin, line_buf)) {
+		buf += line_buf;
+		buf += '\n';
+	}
+	if(buf.size()) {
+		buf.pop_back();
+	}
+	return buf;
+}
+
 string generate_text(string language, int lenght) {
 	mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
 	string lang_file = LANG_DIR + language + ".words";
 	ifstream fin(lang_file);
 	if(!fin.good()) {
-		return "";
+		// if lang file doesn't exist, read normal file
+		text = read_file(PWD + language);
+		return text;
 	}
 	vector <string> words;
 	string word;
@@ -159,8 +177,8 @@ int main(int argc, char *argv[]) {
 			game_height - 2,
 			game_width
 			);
-	win_header->buf_text(LIGHT + FG_BLACK + "Type anything to start the test..");
-	win_main->buf_text(text);
+	win_main->ctext(text);
+	win_header->ctext(LIGHT + FG_BLACK + "Waiting for you to start the test..");
 	cursor->move(win_main);
 	text = " " + text + "    ";
 	bool first_char = true;
@@ -170,7 +188,7 @@ int main(int argc, char *argv[]) {
 		if(first_char) {
 			starting_time = time_ms();
 			first_char = false;
-			win_header->buf_text(LIGHT + FG_BLUE + "Test started");
+			win_header->ctext(LIGHT + FG_BLUE + "Test started");
 		}
 		// Handle special characters
 		if(k == 127 || k == 8) { // backspace
@@ -178,7 +196,7 @@ int main(int argc, char *argv[]) {
 				erase1(screen);
 			}
 		} else if(k == 3) { // ^C
-			win_header->buf_text(LIGHT + FG_RED + "Test canceled:(");
+			win_header->ctext(LIGHT + FG_RED + "Test canceled:(");
 			return 1;
 		} else if(k == 23) { // ^W
 			if(idx > 0) {
@@ -187,7 +205,11 @@ int main(int argc, char *argv[]) {
 					erase1(screen);
 				}
 			}
-		} else if(k >= 32 && k <= 126) { // Typeable character
+		} else if(k == 5) { // ^E
+			win_main->scroll(1);
+		} else if(k == 25) { // ^Y
+			win_main->scroll(-1);
+		}else if(k >= 32 && k <= 126) { // Typeable character
 			bool change_line = false;
 			if(c.j == win_main->lines[c.i].size() - 1) {
 				change_line = true;
@@ -221,7 +243,7 @@ int main(int argc, char *argv[]) {
 	// 1 char/ms = 12000 wpm
 	float wpm = 12000.0 * text_length / (time_ms() - starting_time);
 	float acc = 1.0 * text_length / (text_length + incorrect_chars) * 100;
-	win_header->buf_text( FG_GREEN + "Test finished!     "
+	win_header->ctext( FG_GREEN + "Test finished!     "
 			+ LIGHT + to_string(wpm) + LIGHT + FG_BLUE + " wpm     "
 			+ LIGHT + FG_GREEN + to_string(acc) + "%" + LIGHT + FG_BLUE + " acc"
 			);

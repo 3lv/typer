@@ -21,10 +21,10 @@ public:
 	const Coords operator+(const Coords &coords);
 };
 
-	/* Consts {{{ */
 namespace color {
 	typedef const std::string ANSIcode;
 	typedef std::string Hl_group;
+	/* Consts {{{ */
 	ANSIcode RESET_COLOR = "\033[0m";
 	ANSIcode LIGHT = "\033[1m";
 	ANSIcode UNDERLINE = "\033[4m";
@@ -44,8 +44,28 @@ namespace color {
 	ANSIcode BG_MAGENTA = "\033[45m";
 	ANSIcode BG_CYAN = "\033[46m";
 	ANSIcode BG_WHITE = "\033[47m";
+	/* }}} */
+	struct ccell_t {
+		typedef std::string color;
+		color before;
+		color after;
+		ccell_t() {
+			before = "";
+			after = "";
+		}
+		ccell_t(color bef, color aft) {
+			before = bef;
+			after = aft;
+		}
+	};
+	typedef std::vector<ccell_t> cvector_t;
+	typedef std::pair<std::string, cvector_t>ctext_t;
 }
-/* }}} */
+
+namespace _option {
+	typedef std::string Sopt_t;
+	typedef int Iopt_t;
+}
 
 class Buffer {
 private:
@@ -54,13 +74,15 @@ public:
 	// Parent window
 	Window *window;
 	// (relative to the Parent window.__coords)
-	Coords cursor_coords;
 	std::string text;
-	std::vector<std::string>lines;
+	color::cvector_t colors;
+	std::vector<std::string> lines;
+	std::vector<color::cvector_t> clines;
 	Buffer();
 	Buffer(Window *window);
 	void update();
 	void change_text(std::string new_text);
+	void change_text(color::ctext_t);
 };
 
 class Window {
@@ -72,7 +94,10 @@ public:
 	Buffer *buffer;
 	unsigned int winnr;
 	Coords __coords;
-	std::vector<std::string>lines;
+	// has to be kept up to date
+	Coords buf_cursor_coords;
+	std::vector<std::string> lines;
+	std::vector<color::cvector_t> clines;
 	// vector that holds the partial sum of the length of the lines
 	std::vector<int> __dplen;
 	unsigned int __lines;
@@ -95,6 +120,9 @@ public:
 	// Update lines to fit the window
 	void update_lines();
 	void buf_text(std::string new_text);
+	void ctext(std::string new_text);
+	// scroll by n lines (+/-)
+	void scroll(int num_lines);
 	// finds the coords of element on specific position
 	Coords nth_char(unsigned int pos);
 };
@@ -119,7 +147,7 @@ public:
 	void move(Coords coords);
 	void move(Window *win);
 	// TODO: function implementation
-	void move_inwin(Direction dir, bool wrap);
+	void ____move_right();
 	void save_coords();
 	void restore_coords();
 };
@@ -146,7 +174,9 @@ public:
 	Window* create_win(Coords coords, unsigned int lines, unsigned int cols);
 	bool in_screen(Coords coords);
 	void rect(const unsigned int I, const unsigned int J, const unsigned int height, const unsigned int width);
-	void printl(Window *win, std::string line);
+	// Print Color Line
+	void printcl(Window *win, color::ctext_t cline);
+	void printcl(Window *win, std::string ctext);
 	void draw_win(Window *win);
 	void draw_win(const unsigned int winnr);
 	void resize();
