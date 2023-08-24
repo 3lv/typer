@@ -15,8 +15,10 @@ DBGCXXFLAGS = -g -DDEBUG
 RELCXXFLAGS = -O3 -static -DNDEBUG
 
 SOURCES = ../src/main.cpp \
+	  ../src/list.cpp \
 	  ../src/screen.cpp
 OBJECTS = main.o \
+	  list.o \
 	  screen.o
 
 TARGET  = typer
@@ -46,6 +48,7 @@ main.o:		../src/main.cpp \
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o main.o ../src/main.cpp
 
 screen.o:	../src/screen.cpp \
+		../include/list.h \
 		../include/screen.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o screen.o ../src/screen.cpp
 

@@ -1,11 +1,13 @@
 #ifndef SCREEN_H
 #define SCREEN_H
+
 #include <iostream>
-#include <string.h>
+#include <string>
 #include <vector>
-#include <map>
+#include "list.h"
 
 class Coords;
+class Buffer_t;
 class Buffer;
 class Window;
 class Screen;
@@ -46,20 +48,21 @@ namespace color {
 	ANSIcode BG_WHITE = "\033[47m";
 	/* }}} */
 	struct ccell_t {
-		typedef std::string color;
-		color before;
-		color after;
+		typedef std::string color_t;
+		color_t before;
+		color_t after;
 		ccell_t() {
 			before = "";
 			after = "";
 		}
-		ccell_t(color bef, color aft) {
+		ccell_t(color_t bef, color_t aft) {
 			before = bef;
 			after = aft;
 		}
 	};
-	typedef std::vector<ccell_t> cvector_t;
-	typedef std::pair<std::string, cvector_t>ctext_t;
+	typedef std::vector<ccell_t> cline_t;
+	typedef std::vector<cline_t> vcline_t;
+	typedef std::pair<std::string, cline_t>ctext_t;
 }
 
 namespace _option {
@@ -67,22 +70,53 @@ namespace _option {
 	typedef int Iopt_t;
 }
 
+struct cell_t {
+	unsigned char byte;
+	color::ccell_t color;
+	cell_t() {
+		byte = 0;
+	}
+	cell_t(char ch) {
+		byte = ch;
+	}
+	operator char() const {
+		return byte;
+	}
+	void operator=(char ch) {
+		byte = ch;
+	}
+	void operator=(color::ccell_t col) {
+		color = col;
+	}
+	friend std::ostream& operator<<(std::ostream &os, cell_t &cell) {
+		return os << cell.color.before << cell.byte << cell.color.after;
+	}
+};
+
+
 class Buffer {
+public:
+	typedef List<cell_t> line_t;
+	//typedef List<line_t> buf_t;
+	typedef List<List<cell_t>> buf_t;
+	typedef std::vector<cell_t> vline_t;
+	typedef std::vector<vline_t> vbuf_t;
+	typedef std::vector<std::string> vtext_t;
+	typedef std::pair<vtext_t, color::vcline_t> vctext_t;
 private:
+	buf_t _buffer;
 public:
 	Screen *screen;
 	// Parent window
 	Window *window;
 	// (relative to the Parent window.__coords)
-	std::string text;
-	color::cvector_t colors;
-	std::vector<std::string> lines;
-	std::vector<color::cvector_t> clines;
 	Buffer();
 	Buffer(Window *window);
-	void update();
-	void change_text(std::string new_text);
-	void change_text(color::ctext_t);
+	void change_content(vtext_t vtext);
+	void change_color(color::vcline_t vcline);
+	size_t size();
+	line_t operator[](size_t idx);
+	buf_t* operator+(size_t idx);
 };
 
 class Window {
@@ -96,60 +130,43 @@ public:
 	Coords __coords;
 	// has to be kept up to date
 	Coords buf_cursor_coords;
-	std::vector<std::string> lines;
-	std::vector<color::cvector_t> clines;
 	// vector that holds the partial sum of the length of the lines
-	std::vector<int> __dplen;
 	unsigned int __lines;
 	unsigned int __cols;
 	struct Viewport {
 		Window *window;
-		unsigned int first_line;
-		unsigned int _last_line;
-		unsigned int last_line() {
-			return first_line + window->__lines - 1;
-		}
+		Buffer::line_t* first_line;
 		Viewport(Window *win) {
 			this->window = win;
 			first_line = 0;
 		}
 	} viewport;
-	unsigned int __v_first_line = 0;
 	Window(Screen *screen, Coords coords, unsigned int lines, unsigned int cols);
 	void update(Coords coords, unsigned int lines, unsigned int cols);
-	// Update lines to fit the window
-	void update_lines();
-	void buf_text(std::string new_text);
-	void ctext(std::string new_text);
+	void buf_text(Buffer::vtext_t vtext);
+	void buf_text(std::string next);
+	void buf_color(color::vcline_t vcline);
+	void buf_ctext(std::string ctext);
 	// scroll by n lines (+/-)
-	void scroll(int num_lines);
-	// finds the coords of element on specific position
-	Coords nth_char(unsigned int pos);
+	//void scroll(int num_lines);
 };
 
 class Cursor {
 private:
 public:
-	enum class Direction{
-		none, up, down, right, left
-	};
 	static Cursor cursor;
 	Screen *screen;
 	Window *window;
 	Coords stored_coords[10];
-	// lazy loaded coords (might not be accurate)
-	Coords __coords;
-	// calculated coords
-	Coords buffer_coords;
 	Cursor(Screen *screen);
-	Coords coords();
-	void move(unsigned int i, unsigned int j);
-	void move(Coords coords);
-	void move(Window *win);
+	Coords _coords();
+	void _move(unsigned int i, unsigned int j);
+	void _move(Coords coords);
+	// like <space> in vim
 	// TODO: function implementation
 	void ____move_right();
-	void save_coords();
-	void restore_coords();
+	void _save_coords();
+	void _restore_coords();
 };
 
 class Screen {
@@ -172,15 +189,12 @@ public:
 	void __update_size();
 	void __update();
 	Window* create_win(Coords coords, unsigned int lines, unsigned int cols);
-	bool in_screen(Coords coords);
 	void rect(const unsigned int I, const unsigned int J, const unsigned int height, const unsigned int width);
 	// Print Color Line
-	void printcl(Window *win, color::ctext_t cline);
-	void printcl(Window *win, std::string ctext);
 	void draw_win(Window *win);
-	void draw_win(const unsigned int winnr);
 	void resize();
 };
 
 #endif // SCREEN_H
-// vim:fdm=marker:
+
+// vi:fdm=marker

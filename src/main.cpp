@@ -3,7 +3,6 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <string.h>
 #include <chrono>
 #include <thread>
 #include <random>
@@ -60,14 +59,6 @@ struct User_colors {
 	} typed;
 } C;
 
-vector<string> text_words;
-
-
-string UP   = "\033[A";
-string DOWN = "\033[B";
-string RIGHT= "\033[C";
-string LEFT = "\033[D";
-
 bool running = true;
 int incorrect_chars = 0;
 Coords c;
@@ -75,24 +66,7 @@ int idx = 0;
 string text = "";
 string language = "english";
 size_t word_count = 10;
-size_t text_length = 0;
-
-void erase1(Screen *screen) { // TODO: outdated function, change it to match window size
-	if(idx == 0) {
-		return;
-	}
-	if(c.j == 0) {
-		c.i--;
-		c.j = screen->windows[1]->lines[c.i].size() - 1;
-		screen->cursor->move(c.i + screen->windows[1]->__coords.i, c.j + screen->windows[1]->__coords.j);
-		cout << C.normal.fg << text[idx] << '\b' << flush;
-		idx--;
-	} else {
-		cout << '\b' << C.normal.fg << text[idx] << '\b' << flush;
-		c.j--;
-		idx--;
-	}
-}
+vector<string> text_words;
 
 void parse_args(int argc, char *argv[]) {
 	for(int i = 1; i < argc; ++ i) {
@@ -156,12 +130,9 @@ int time_ms() {
 int main(int argc, char *argv[]) {
 	parse_args(argc, argv);
 	text = generate_text(language, word_count);
-	text_length = text.size();
-	if(text_length == 0) {
-		return 1;
-	}
+	size_t text_length = text.size();
 	Screen *screen = &Screen::screen;
-	Cursor *cursor = screen->cursor;
+	//Cursor *cursor = screen->cursor;
 	screen->init();
 	int game_height = (screen->__lines + 1) * 0.6;
 	int game_width = (screen->__cols + 1) * 0.8;
@@ -177,77 +148,27 @@ int main(int argc, char *argv[]) {
 			game_height - 2,
 			game_width
 			);
-	win_main->ctext(text);
-	win_header->ctext(LIGHT + FG_BLACK + "Waiting for you to start the test..");
-	cursor->move(win_main);
-	text = " " + text + "    ";
-	bool first_char = true;
+	win_header->buf_ctext(LIGHT + FG_BLACK + "Waiting for you to start the test..");
+	win_main->buf_text(text);
+	Buffer buf_main = *win_main->buffer;
+	(buf_main[2] + 4)->append('-');
+	(buf_main[2] + 4)->append('-');
+	screen->draw_win(win_main);
+	getch();
+	return 0;
 	int starting_time = 0;
 	while(running) {
-		char k = getch();
-		if(first_char) {
-			starting_time = time_ms();
-			first_char = false;
-			win_header->ctext(LIGHT + FG_BLUE + "Test started");
-		}
-		// Handle special characters
-		if(k == 127 || k == 8) { // backspace
-			if(idx > 0) {
-				erase1(screen);
-			}
-		} else if(k == 3) { // ^C
-			win_header->ctext(LIGHT + FG_RED + "Test canceled:(");
-			return 1;
-		} else if(k == 23) { // ^W
-			if(idx > 0) {
-				erase1(screen);
-				while(idx > 0 && text[idx] != ' ') {
-					erase1(screen);
-				}
-			}
-		} else if(k == 5) { // ^E
-			win_main->scroll(1);
-		} else if(k == 25) { // ^Y
-			win_main->scroll(-1);
-		}else if(k >= 32 && k <= 126) { // Typeable character
-			bool change_line = false;
-			if(c.j == win_main->lines[c.i].size() - 1) {
-				change_line = true;
-			}
-			if(k == text[idx + 1]) {
-				idx++;
-				c.j++;
-				cout << C.typed.correct.fg << text[idx] << flush;
-			} else if(k != text[idx + 1]) {
-				idx++;
-				c.j++;
-				incorrect_chars ++;
-				if(text[idx] == ' ') {
-					cout << BG_RED << text[idx] << flush;
-				} else {
-					cout << C.typed.incorrect.fg << text[idx] << flush;
-				}
-			}
-			if(idx == text_length) {
-				running = false;
-			}
-			if(change_line == true) {
-				++ c.i;
-				c.j = 0;
-				// move considering win_main.viewport
-				cursor->move(c.i + win_main->__coords.i - win_main->viewport.first_line, c.j + win_main->__coords.j);
-			}
-			cout << RESET_COLOR;
-		}
 	}
 	// 1 char/ms = 12000 wpm
 	float wpm = 12000.0 * text_length / (time_ms() - starting_time);
 	float acc = 1.0 * text_length / (text_length + incorrect_chars) * 100;
-	win_header->ctext( FG_GREEN + "Test finished!     "
+	win_header->buf_ctext( FG_GREEN + "Test finished!     "
 			+ LIGHT + to_string(wpm) + LIGHT + FG_BLUE + " wpm     "
 			+ LIGHT + FG_GREEN + to_string(acc) + "%" + LIGHT + FG_BLUE + " acc"
 			);
 	//screen->cursor->move(screen->__lines, 0);
-	char end_char = getch();
+	getch();
 	return 0;
 }
+
+// vi:fdm=marker

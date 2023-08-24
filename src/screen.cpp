@@ -1,11 +1,19 @@
 #include <iostream>
 #include <fstream>
-#include <string.h>
 #include <signal.h>
 #include "../include/screen.h"
 #ifdef _WIN32
 # include <windows.h>
 #endif
+
+namespace _Screen {/*{{{*/
+	std::ofstream LOG("debug.log");
+	inline void resize_handler(int) {
+		Screen::screen.resize();
+		//Screen::resize();
+	}
+}
+/*}}}*/
 
 /*{{{ color and _option*/
 // TODO: move these to screen.h without messing linker ld
@@ -59,7 +67,7 @@ std::string display_chr(char chr) {
 size_t print_strlen(std::string line) {
 	size_t n = line.size();
 	size_t plen = 0;
-	for(int i = 0; i < n; ++i) {
+	for(size_t i = 0; i < n; ++i) {
 		plen += display_chr(line[i]).size();
 	}
 	return plen;
@@ -138,155 +146,37 @@ const Coords Coords::operator+(const Coords &coords) {
 	return Coords(this->i + coords.i, this->j + coords.j);
 } /*}}}*/
 
-/*{{{ Buffer*/
-Buffer::Buffer() {
-	text = "";
-	this->window = NULL;
-	this->screen = NULL;
-}
-Buffer::Buffer(Window *window) {
-	text = "";
-	this->window = window;
-	this->screen = window->screen;
-}
-void Buffer::update() {
-	this->lines.clear();
-	this->clines.clear();
-	std::string line = "";
-	color::cvector_t cline;
-	for(int i = 0; i < text.size(); ++ i) {
-		if(text[i] == '\n') {
-			// TODO: add \n to the line but don't display it
-			lines.push_back(line);
-			clines.push_back(cline);
+/*{{{ text parsing function*/
+Buffer::vtext_t split(std::string text, char split_at = '\n') {
+	Buffer::vtext_t vtext;
+	std::string line;
+	for(char& c : text) {
+		if(c == split_at) {
+			//line += '\n'; // optional?
+			vtext.push_back(line);
 			line = "";
-			cline.clear();
 		} else {
-			line += text[i];
-			cline.push_back(colors[i]);
+			line += c;
 		}
 	}
-	if(line.size() != 0) {
-		lines.push_back(line);
-		clines.push_back(cline);
+	if(line != "") {
+		vtext.push_back(line);
 	}
+	return vtext;
 }
-void Buffer::change_text(std::string new_text) {
-	this->text = new_text;
-	this->update();
-	this->window->update_lines();
-	// TODO this call s ugly
-	this->screen->draw_win(this->window);
-	//this->window->redraw();
-}/*}}}*/
-
-/*{{{ Window*/
-Window::Window(Screen *screen, Coords coords, unsigned int lines, unsigned int cols): __coords(coords), viewport(this) {
-	this->screen = screen;
-	this->buffer = new Buffer(this);
-	__lines = lines;
-	__cols = cols;
-	this->viewport.first_line = 0;
-	this->buf_cursor_coords = Coords();
-};
-void Window::update(Coords coords, unsigned int lines, unsigned int cols) {
-	this->__coords = coords;
-	this->__lines = lines;
-	this->__cols = cols;
-	this->update_lines();
-	//?redraw window
-}
-void Window::update_lines() {
-	// TODO: break_word not used! (always false)
-	bool break_word = false;
-	this->lines.clear();
-	this->clines.clear();
-	// TODO: USE POINTER INSTEAD
-	std::vector<std::string>buf_lines = this->buffer->lines;
-	std::vector<color::cvector_t>buf_clines = this->buffer->clines;
-	std::string word = "";
-	color::cvector_t cword;
-	for(int li = 0; li < buf_lines.size(); ++ li) {
-		for(int idx = 0; idx < buf_lines[li].size(); ++ idx) {
-			char cur_ch = buf_lines[li][idx];
-			color::ccell_t cur_ccell = buf_clines[li][idx];
-			if(cur_ch != ' ') {
-				word += cur_ch;
-				cword.push_back(cur_ccell);
-			} else {
-				word += " ";
-				cword.push_back(cur_ccell);
-				// TODO: FIXME: if 1 word longer than line (also consider escape chars)
-				// TODO: FIXME: if 1 word longer than line (also consider escape chars)
-				// TODO: FIXME: if 1 word longer than line (also consider escape chars)
-				if(lines.size() == 0) {
-					lines.push_back(word);
-					clines.push_back(cword);
-				} else if(print_strlen(lines[lines.size() - 1]) + print_strlen(word) <= this->__cols) {
-					lines[lines.size() - 1] += word;
-					clines[clines.size() - 1].insert(
-							clines[clines.size() - 1].end(),
-							cword.begin(), cword.end()
-							);
-				} else {
-					if(print_strlen(word) > this->__cols) {
-						// TODO: implement word longer than line <<<
-					} else {
-						lines.push_back(word);
-						clines.push_back(cword);
-					}
-				}
-				word = "";
-				cword.clear();
-			}
-		}
-		if(word.size() != 0) {
-			if(lines.size() == 0) {
-				lines.push_back(word);
-				clines.push_back(cword);
-			} else if(print_strlen(lines[lines.size() - 1]) + print_strlen(word) <= this->__cols) {
-				lines[lines.size() - 1] += word;
-				// append cword to clines
-				clines[clines.size() - 1].insert(
-						clines[clines.size() - 1].end(),
-						cword.begin(), cword.end()
-						);
-			} else {
-				lines.push_back(word);
-				clines.push_back(cword);
-			}
-			word = "";
-			cword.clear();
-		}
-		//create new line
-		lines.push_back("");
-		clines.push_back(color::cvector_t());
-	}
-	if(lines.size()) {
-		if(lines[lines.size() - 1].size() == 0) {
-			lines.pop_back();
-			clines.pop_back();
-		}
-	}
-	this->__dplen.clear();
-	__dplen.push_back(lines[0].size());
-	for(int i = 1; i < lines.size(); ++ i) {
-		__dplen.push_back(__dplen[i - 1] + lines[i].size());
-	}
-}
-color::ctext_t ctext_parse(std::string ctext) {
+color::ctext_t cstring_parse(std::string cstring) {
 	std::string active_color = color::RESET_COLOR;
 	std::string text = "";
-	color::cvector_t cvec;
+	color::cline_t cline;
 	std::string _color = "";
 	// multiple colors one after another
 	bool color_secv = true;
-	for(int i = 0; i < ctext.size(); ++i) {
-		if(ctext[i] == '\033') {
-			for(; ctext[i] != 'm' && i < ctext.size(); ++i) {
-				_color += ctext[i];
+	for(size_t i = 0; i < cstring.size(); ++i) {
+		if(cstring[i] == '\033') {
+			for(; cstring[i] != 'm' && i < cstring.size(); ++i) {
+				_color += cstring[i];
 			}
-			if(ctext[i] != 'm') {
+			if(cstring[i] != 'm') {
 				// error
 				continue;
 			}
@@ -299,60 +189,99 @@ color::ctext_t ctext_parse(std::string ctext) {
 			continue;
 		}
 		color_secv = false;
-		text += ctext[i];
-		cvec.push_back(color::ccell_t(active_color, color::RESET_COLOR));
+		text += cstring[i];
+		cline.push_back(color::ccell_t(active_color, color::RESET_COLOR));
 	}
-	return color::ctext_t(text, cvec);
+	return color::ctext_t(text, cline);
 }
-void Window::buf_text(std::string new_text) {
-	// by default scroll all the way to the top
+Buffer::vctext_t vcstring_parse(std::vector<std::string> vcstring) {
+	Buffer::vtext_t vtext;
+	color::vcline_t vcline;
+	color::ctext_t ctext;
+	for(size_t i = 0; i < vcstring.size(); ++i) {
+		ctext = cstring_parse(vcstring[i]);
+		vtext.push_back(ctext.first);
+		vcline.push_back(ctext.second);
+	}
+	return Buffer::vctext_t(vtext, vcline);
+}
+/*}}}*/
+
+/*{{{ Buffer*/
+Buffer::Buffer() {
+	window = NULL;
+	screen = NULL;
+}
+Buffer::Buffer(Window *window) {
+	Buffer();
+	this->window = window;
+	screen = window->screen;
+}
+void Buffer::change_content(vtext_t vtext) {
+	_buffer = vtext;
+}
+void Buffer::change_color(color::vcline_t vcline) {
+	_buffer = vcline;
+}
+size_t Buffer::size() {
+	return _buffer.size();
+}
+Buffer::line_t Buffer::operator[](size_t idx) {
+	return _buffer[idx];
+}
+Buffer::buf_t* Buffer::operator+(size_t idx) {
+	return _buffer + idx;
+}
+/*}}}*/
+
+/*{{{ Window*/
+Window::Window(Screen *screen, Coords coords, unsigned int lines, unsigned int cols): __coords(coords), viewport(this) {
+	this->screen = screen;
+	buffer = new Buffer(this);
+	__lines = lines;
+	__cols = cols;
 	viewport.first_line = 0;
 	buf_cursor_coords = Coords();
-	this->buffer->change_text(new_text);
+};
+void Window::update(Coords coords, unsigned int lines, unsigned int cols) {
+	this->__coords = coords;
+	this->__lines = lines;
+	this->__cols = cols;
+	//?redraw window
 }
-// change buffer's text with color new_text
-void Window::ctext(std::string new_text) {
+void Window::buf_text(Buffer::vtext_t vtext) {
+	// TODO: viewport.first_line should be a pointer to first buffer line
 	viewport.first_line = 0;
-	buf_cursor_coords = Coords();
-	color::ctext_t ctext = ctext_parse(new_text);
-	this->buffer->colors = ctext.second;
-	this->buffer->change_text(ctext.first);
-	// by default scroll all the way to the top
-}
-void Window::scroll(int num_lines) {
-	int new_first_line = viewport.first_line + num_lines;
-	if(new_first_line < 0) {
-		new_first_line = 0;
-		//UPDATE buf_cursor_coords;
-	}
-	if(new_first_line > this->lines.size() - 1) {
-		new_first_line = this->lines.size() - 1;
-	}
-	if(viewport.first_line == new_first_line) {
-		return;
-	}
-	viewport.first_line = new_first_line;
+	// TODO: change cursor position to first char of first line
+	//
+	buffer->change_content(vtext);
 	screen->draw_win(this);
 }
-Coords Window::nth_char(unsigned int pos) {
-	int ac = 0;
-	int pas = 1<<30;
-	int n = __dplen.size();
-	while(pas) {
-		if(ac + pas < n && __dplen[ac + pas] < pos) {
-			ac += pas;
-		}
-		pas >>= 1;
-	}
-	return Coords(ac, pos - __dplen[ac]);
-}/*}}}*/
+void Window::buf_color(color::vcline_t vcline) {
+	buffer->change_color(vcline);
+	screen->draw_win(this);
+}
+void Window::buf_text(std::string text) {
+	buf_text(split(text));
+}
+// change buffer's text with color new_text
+void Window::buf_ctext(std::string ctext) {
+	Buffer::vctext_t vctext = vcstring_parse(split(ctext));
+	//viewport.first_line = 0;
+	//buf_cursor_coords = Coords();
+	buffer->change_content(vctext.first);
+	buffer->change_color(vctext.second);
+	screen->draw_win(this);
+	// TODO: by default scroll all the way to the top
+}
+/*}}}*/
 
 /*{{{ Cursor*/
-Cursor::Cursor(Screen *screen) : stored_coords{Coords(0,0)}, __coords(0,0) {
+Cursor::Cursor(Screen *screen) : stored_coords{Coords(0,0)} {
 	this->screen = screen;
 	window = NULL;
 }
-Coords Cursor::coords() {
+Coords Cursor::_coords() {
 	unsigned int i, j;
 #ifdef _WIN32
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
@@ -368,48 +297,23 @@ Coords Cursor::coords() {
 #endif
 	return Coords(i, j);
 }
-void Cursor::move(const unsigned int i, const unsigned int j) {
+void Cursor::_move(const unsigned int i, const unsigned int j) {
 	// 1 based index for \033[<L>;<C>H ansi escape code
 	std::cout << "\033["
 	<< std::to_string(i + 1) + ";" + std::to_string(j + 1)
 	<< "H" << std::flush;
-	this->__coords = Coords(i, j);
 }
-void Cursor::move(Coords __coords) {
-	move(__coords.i, __coords.j);
+void Cursor::_move(Coords coords) {
+	_move(coords.i, coords.j);
 }
-void Cursor::move(Window *win) {
-	if(this->window == win) {
-		return;
-	}
-	this->window = win;
-	this->move(win->__coords);
-	// TODO: recover coords win_cursor_coords has to be implemented (in move_right() etc.)
-	//this->move(win->__coords + win->win_cursor_coords);
+void Cursor::_save_coords() {
+	stored_coords[0] = _coords();
 }
-// like <space> in vim
-// TODO: WIP
-void Cursor::____move_right() {
-	Coords *bc = &window->buf_cursor_coords;
-	bc->j++;
-	if(bc->j > window->buffer->lines.size()) {
-		window->buf_cursor_coords = Coords(bc->i + 1, 0);
-	}
-}
-void Cursor::save_coords() {
-	this->stored_coords[0] = this->coords();
-}
-void Cursor::restore_coords() {
-	move(this->stored_coords[0]);
+void Cursor::_restore_coords() {
+	_move(stored_coords[0]);
 }/*}}}*/
 
-namespace _Screen {/*{{{*/
-	std::ofstream LOG("debug.log");
-	inline void resize_handler(int signal_nul) {
-		Screen::screen.resize();
-		//Screen::resize();
-	}
-}
+/*{{{ Screen */
 Screen Screen::screen;
 Screen::Screen() {
 	this->cursor = new Cursor(this);
@@ -437,122 +341,35 @@ Window* Screen::create_win(Coords coords, unsigned int lines, unsigned int cols)
 }
 // just updates the size, doesn't return
 void Screen::__update_size() {
-	cursor->save_coords();
-	cursor->move(9998,9998);
-	Coords lc = cursor->coords();
+	cursor->_save_coords();
+	cursor->_move(9998,9998);
+	Coords lc = cursor->_coords();
 	this->__lines = lc.i;
 	this->__cols = lc.j;
-	cursor->restore_coords();
+	cursor->_restore_coords();
 }
 void Screen::__update() {
 	this->__update_size();
 }
-bool Screen::in_screen(Coords coords) {
-	return (0 <= coords.i && coords.i < this->__lines) &&
-		(0 <= coords.j && coords.j < this->__cols);
-}
-void Screen::rect(const unsigned int I, const unsigned int J, /* {{{ */
-		const unsigned int height, const unsigned int width) {
-	/*
-	 *	OUTDATED
-	 *      1 ------> 2
-	 *      ^         |
-	 *      |         |
-	 *      |         |
-	 *      |         v
-	 *      4 <------ 3
-	 */
-	/*
-	 *      1 ------> 2
-	 *      3         |
-	 *      |         |
-	 *      |         |
-	 *      v         v
-	 *      4 ----->5 3
-	 *
-	 */
-	cursor->save_coords();
-	cursor->move(I, J);
-	std::cout << "┌"; // top left corner
-	for(int i = 1; i < width - 1; ++ i) {
-		std::cout << "─";
-	}
-	std::cout << "┐"; // top right corner
-	for(int i = 1; i < height - 1; ++ i) {
-		std::cout << "\n\b" << "│";
-	}
-	std::cout << "\n\b";
-	std::cout << "┘"; // bot right corner
-	cursor->move(I, J + 1);
-	for(int i = 1; i < height - 1; ++ i) {
-		std::cout << "\n\b" << "│";
-	}
-	std::cout << "\n\b" << "└"; // bot left corner
-	for(int i = 1; i < width - 1; ++ i) {
-		std::cout << "─";
-	}
-	cursor->restore_coords();
-} /* }}} */
-void Screen::printcl(Window *win, color::ctext_t cline) {
-	for(int i = 0; i < cline.first.size(); ++i) {
-		char chr = cline.first[i];
-		color::ccell_t color = cline.second[i];
-		std::cout << color.before << chr << color.after;
-	}
-	// TODO: string::size() is not accurate for escape chars, implement one
-	const int spaces = (int)win->__cols - print_strlen(cline.first);
-	for(int i = 0; i < spaces; ++ i) {
-		std::cout << " ";
-	}
-}
-void Screen::printcl(Window *win, std::string ctext) {
-	printcl(win, ctext_parse(ctext));
-}
 void Screen::draw_win(Window *window) {
-	cursor->save_coords();
+	cursor->_save_coords();
 	Coords c_coords = window->__coords;
-	cursor->move(c_coords);
-	int first_visible_line = window->viewport.first_line;
-	int last_visible_line = first_visible_line + window->__lines - 1; // this can be after the last window->line[]
-	bool first_line_visible = false, last_line_visible = false;
-	if(first_visible_line == 0) {
-		first_line_visible = true;
-	}
-	if(last_visible_line >= window->lines.size() - 1) {
-		last_line_visible = true;
-	}
-	std::cout << color::RESET_COLOR;
-	for(int line_idx = first_visible_line; line_idx <= last_visible_line; ++ line_idx) {
-		cursor->move(c_coords); // in_screen(c_coords) should always by true
-		if(line_idx == first_visible_line) {
-			if(!first_line_visible) {
-				printcl(window, color::FG_MAGENTA + "@@@");
-				++ c_coords.i;
-				std::cout << color::RESET_COLOR;
-				continue;
-			}
+	cursor->_move(c_coords);
+	Buffer *buf = window->buffer;
+	int n = buf->size();
+	//int n = buf->size();
+	for(int i = 0; i < n; ++i) {
+		List<cell_t> line = (*buf)[i];
+		int m = line.size();
+		for(int j = 0; j < m; ++j) {
+			// o(n) complexity
+			std::cout << line[j];
 		}
-		if(line_idx == last_visible_line) {
-			if(!last_line_visible && window->lines.size() >= 2) {
-				printcl(window, color::hl_NonText + "@@@");
-				++ c_coords.i;
-				continue;
-			}
-		}
-		if(line_idx < window->lines.size()) {
-			printcl(window, make_pair(window->lines[line_idx], window->clines[line_idx]));
-			//std::cout << printable_strlen(window->lines[line_idx]);
-		} else {
-			printcl(window, color::hl_EndOfBuffer + "~");
-		}
-		// TODO: clear what was previously displayed/ fill line with spaces function
-		++ c_coords.i;
+		c_coords.i++;
+		cursor->_move(c_coords);
 	}
-	std::cout << color::RESET_COLOR;
-	cursor->restore_coords();
-}
-void Screen::draw_win(const unsigned int winnr) {
-	this->draw_win(this->windows[winnr]);
+	std::cout << color::RESET_COLOR << std::flush;
+	cursor->_restore_coords();
 }
 void Screen::resize() {
 #ifdef _WIN32
@@ -561,48 +378,7 @@ void Screen::resize() {
 	//std::cout << "\003[2J";
 	system("clear");
 #endif
-	// PROVIZORIU
-	this->__update();
-	int winn = windows.size();
-	int si = this->__lines;
-	int sj = this->__cols;
-	int game_height = si * 0.6;
-	int game_width = sj * 0.8;
-	//game_width = std::min(game_width, (int)text_length);
-	game_width = std::min(game_width, 100);
-	int starti = (si - game_height) / 2;
-	int startj = (sj - game_width) / 2;
-	screen.windows[0]->update( Coords(starti, startj),
-			2,
-			game_width
-			);
-	// screen->__lines numarul de linii
-	screen.windows[1]->update( Coords(starti + 2, startj),
-			game_height - 2,
-			game_width
-			);
-	//DEBUG
-	std::string debug_str = "RESIZE_DEBUG: "
-		+ std::to_string(starti)
-		+ ", "
-		+ std::to_string(startj)
-		+ " new win size";
-	if(winn > 0) {
-		this->windows[0]->ctext(
-				debug_str
-				);
-	}
-	for(int winnr = 0; winnr < winn; ++ winnr) {
-		this->draw_win(winnr);
-	}
-	if(winn >= 2) {
-		cursor->window = windows[1];
-		cursor->move(windows[1]->__coords);
-		/* // TODO
-		// moves the cursor the windows' buffer last position
-		cursor->move(windows[1]);
-		*/
-	}
+	// TODO
 }/*}}}*/
 
-// vim:fdm=marker:
+// vi:fdm=marker
