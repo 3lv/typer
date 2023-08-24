@@ -17,13 +17,15 @@ public:
 	List(T val);
 	List* insert(T val);
 	List* append(T val);
+	void pop();
 	size_t size() const;
 	template <class S>
 	void operator=(std::vector<S> &v);
 	void operator=(std::string str);
 	List* operator+(ssize_t idx);
 	List* operator-(ssize_t idx);
-	T &operator[](ssize_t idx);
+	List<T> &operator[](ssize_t idx);
+	operator T();
 	// TODO: IMPLEMENT RECURSIVE DELETE
 };
 /*}}}*/
@@ -74,6 +76,15 @@ List<T>* List<T>::insert(T val) {
 	return new_node;
 }
 template <class T>
+void List<T>::pop() {
+	if(prev == 0) {
+	} else {
+		prev->next = next;
+		next->prev = prev;
+	}
+	// ?? actually delete
+}
+template <class T>
 List<T>* List<T>::append(T val) {
 	List *new_node = new List(val);
 	next->prev = new_node;
@@ -108,8 +119,12 @@ List<T>* List<T>::operator-(ssize_t idx) {
 	return this->operator+(-idx);
 }
 template <class T>
-T &List<T>::operator[](ssize_t idx) {
-	return (this->operator+(idx))->value;
+List<T> &List<T>::operator[](ssize_t idx) {
+	return *(this->operator+(idx));
+}
+template <class T>
+List<T>::operator T() {
+	return this->value;
 }
 /*}}}*/
 

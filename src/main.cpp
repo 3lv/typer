@@ -149,15 +149,37 @@ int main(int argc, char *argv[]) {
 			game_width
 			);
 	win_header->buf_ctext(LIGHT + FG_BLACK + "Waiting for you to start the test..");
+	screen->draw_win(win_header);
 	win_main->buf_text(text);
 	Buffer buf_main = *win_main->buffer;
-	(buf_main[2] + 4)->append('-');
-	(buf_main[2] + 4)->append('-');
+	/*
+	 // usage example
+	buf_main[2][6].append('a');
+	buf_main[2][7].value.color = color::FG_RED + color::BG_GREEN;
+	 // or simply
+	buf_main[2][6].append(cell_t('a', color::FG_GREEN + color::BG_RED));
+	// aftere these redraw window
 	screen->draw_win(win_main);
-	getch();
-	return 0;
+	*/
 	int starting_time = 0;
+	int line = 5;
+	int col = 7;
 	while(running) {
+		char k = getch();
+		if(k == 3) {
+			running = false;
+			break;
+		} else if(k == 8 || k == 127) {
+			buf_main[line][col - 1].pop();
+			col--;
+		} else if(k == 'd') {
+			buf_main[line].pop();
+			line--;
+		} else {
+			buf_main[line][col].insert(cell_t(k, color::FG_GREEN + color::BG_MAGENTA));
+			col++;
+		}
+		screen->draw_win(win_main);
 	}
 	// 1 char/ms = 12000 wpm
 	float wpm = 12000.0 * text_length / (time_ms() - starting_time);

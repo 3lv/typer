@@ -355,15 +355,16 @@ void Screen::draw_win(Window *window) {
 	cursor->_save_coords();
 	Coords c_coords = window->__coords;
 	cursor->_move(c_coords);
-	Buffer *buf = window->buffer;
-	int n = buf->size();
+	Buffer buf = *(window->buffer);
+	int n = buf.size();
+	n = std::min(n, 20);
 	//int n = buf->size();
 	for(int i = 0; i < n; ++i) {
-		List<cell_t> line = (*buf)[i];
+		List<cell_t> line = buf[i];
 		int m = line.size();
 		for(int j = 0; j < m; ++j) {
 			// o(n) complexity
-			std::cout << line[j];
+			std::cout << (cell_t)line[j];
 		}
 		c_coords.i++;
 		cursor->_move(c_coords);

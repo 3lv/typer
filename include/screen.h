@@ -55,6 +55,10 @@ namespace color {
 			before = "";
 			after = "";
 		}
+		ccell_t(color_t bef) {
+			before = bef;
+			after = RESET_COLOR;
+		}
 		ccell_t(color_t bef, color_t aft) {
 			before = bef;
 			after = aft;
@@ -79,6 +83,10 @@ struct cell_t {
 	cell_t(char ch) {
 		byte = ch;
 	}
+	cell_t(char ch, color::ccell_t co) {
+		byte = ch;
+		color = co;
+	}
 	operator char() const {
 		return byte;
 	}
@@ -88,7 +96,7 @@ struct cell_t {
 	void operator=(color::ccell_t col) {
 		color = col;
 	}
-	friend std::ostream& operator<<(std::ostream &os, cell_t &cell) {
+	friend std::ostream& operator<<(std::ostream &os, cell_t cell) {
 		return os << cell.color.before << cell.byte << cell.color.after;
 	}
 };
